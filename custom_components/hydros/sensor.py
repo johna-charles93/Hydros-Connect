@@ -34,7 +34,12 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
 from .hydros_hub import HydrosHub
-from .types import is_binary_output, is_doser_output, coerce_int as _coerce_int
+from .types import (
+    is_binary_output,
+    is_doser_output,
+    is_variable_pump_output,
+    coerce_int as _coerce_int,
+)
 from .entity_builders import (
     build_collective_alerts_description,
     build_collective_debug_description,
@@ -239,7 +244,17 @@ COLLECTIVE_HEARTBEAT_OFFLINE_SECONDS = 30
 COLLECTIVE_HEARTBEAT_STALE_SECONDS = 300
 
 
-def _normalize_output_value(key: str | None, value: Any) -> Any:
+def _normalize_output_value(
+    key: str | None,
+    value: Any,
+    metadata: dict[str, Any] | None = None,
+) -> Any:
+    if key == "valueState" and is_variable_pump_output(metadata):
+        try:
+            return round(float(value) / 100.0, 3)
+        except (TypeError, ValueError):
+            return value
+
     transform = OUTPUT_VALUE_TRANSFORMS.get(key or "")
     if not transform:
         return value
@@ -826,7 +841,11 @@ class HydrosSensor(SensorEntity):
             else:
                 ordered_keys = base_key_order
 
-            if self._section == "Output" and self._primary_key == "valueState":
+            if (
+                self._section == "Output"
+                and self._primary_key == "valueState"
+                and not is_variable_pump_output(metadata)
+            ):
                 override_state = self._interpret_output_state(value, metadata)
                 if override_state is not None:
                     return override_state
@@ -835,14 +854,14 @@ class HydrosSensor(SensorEntity):
                 numeric = _coerce_numeric(value.get(key))
                 if numeric is not None:
                     if self._section == "Output":
-                        return _normalize_output_value(key, numeric)
+                        return _normalize_output_value(key, numeric, metadata)
                     return self._apply_input_transform(numeric)
             return None
 
         numeric_value = _coerce_numeric(value)
         if numeric_value is not None:
             if self._section == "Output":
-                return _normalize_output_value(self._primary_key, numeric_value)
+                return _normalize_output_value(self._primary_key, numeric_value, metadata)
             return self._apply_input_transform(numeric_value)
         return None
 
@@ -954,7 +973,7 @@ class HydrosSensor(SensorEntity):
             if key in payload and f"last_{key}" not in attrs:
                 value = payload[key]
                 if self._section == "Output" and key in OUTPUT_VALUE_TRANSFORMS:
-                    normalized = _normalize_output_value(key, value)
+                    normalized = _normalize_output_value(key, value, metadata)
                     if isinstance(normalized, (int, float)):
                         if key == "frequency":
                             normalized = normalized / 100.0
@@ -968,6 +987,12 @@ class HydrosSensor(SensorEntity):
                     attrs[f"last_{key}"] = transformed
                     if transformed != value:
                         attrs[f"last_{key}_raw"] = value
+                elif self._section == "Output" and key == "valueState":
+                    normalized = _normalize_output_value(key, value, metadata)
+                    attrs[f"last_{key}"] = normalized
+                    if normalized != value:
+                        attrs[f"last_{key}_raw"] = value
+                        attrs[f"last_{key}_unit"] = "%"
                 else:
                     attrs[f"last_{key}"] = value
 

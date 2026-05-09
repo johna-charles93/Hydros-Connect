@@ -12,6 +12,7 @@ from homeassistant.const import UnitOfPower, UnitOfTemperature, UnitOfVolume, Un
 from homeassistant.util import slugify
 
 from .types import coerce_int as _coerce_int
+from .types import is_variable_pump_output
 
 
 def build_input_sensor_description(
@@ -94,6 +95,10 @@ def build_output_sensor_description(
     transform = output_value_transforms.get(primary_key or "")
     unit = transform[0] if transform else None
     state_class = SensorStateClass.MEASUREMENT if unit else None
+
+    if primary_key == "valueState" and is_variable_pump_output(output_meta):
+        unit = "%"
+        state_class = SensorStateClass.MEASUREMENT
 
     return description_cls(
         key=f"{entry.entry_id}-{thing_id}-{slug}",
