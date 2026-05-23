@@ -2,7 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
-## 0.3.1 - 2026-05-08
+## 0.3.3 - 2026-05-22
+
+### Added
+- Support for HACS!
+
+### Fixed
+- Fix crash during mode-change failure recovery: `select.py` called `async_force_status_from_api` and `invalidate_collective_config` on `HydrosHub`, but neither method existed. When a mode change failed, the recovery path raised `AttributeError` before the original API error could be logged. Both methods are now implemented: `invalidate_collective_config` drops the stale cached config so the next read re-fetches from the cloud; `async_force_status_from_api` pulls authoritative status from the REST API, merges it into the status cache, and dispatches the per-thing signal so dependent entities refresh. (Ported from [JLay2026/ha-hydros@4d98d25](https://github.com/JLay2026/ha-hydros/commit/4d98d254f6ef6a1a30338f8984aef87f68475858) — credit to [@JLay2026](https://github.com/JLay2026).)
+
+## 0.3.2 - 2026-05-08
 
 ### Added
 - Support for Skimmer outputs on variable pumps (`type: o10vPump`, `family: vPump`).

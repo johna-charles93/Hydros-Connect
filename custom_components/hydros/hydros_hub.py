@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
@@ -399,6 +399,68 @@ class HydrosHub:
                     return api.change_mode(thing_id=thing_id, mode_id=mode)
 
         await self._hass.async_add_executor_job(_change_mode)
+
+    @callback
+    def invalidate_collective_config(self, thing_id: str) -> None:
+        """Drop the cached collective config so the next read re-fetches.
+
+        Called from ``select.py`` after a failed mode change so the
+        authoritative mode list is reloaded from the cloud rather than
+        the stale cache.
+        """
+        if not thing_id:
+            return
+        self._collective_configs.pop(thing_id, None)
+        # Drop the per-thing lock too so a brand-new fetch isn't
+        # serialized behind a lock from the failed call.
+        self._config_locks.pop(thing_id, None)
+
+    async def async_force_status_from_api(self, thing_id: str) -> None:
+        """Pull authoritative collective status from REST, bypassing MQTT.
+
+        Used as a fallback when MQTT-driven state may be stale or wrong
+        (e.g. after a ``change_mode`` failure). Mirrors the per-thing
+        portion of :py:meth:`async_refresh_collective_metadata`.
+        """
+        if not thing_id:
+            return
+        api = await self._hass.async_add_executor_job(self._ensure_client)
+        try:
+            metadata = await self._hass.async_add_executor_job(api.get_thing, thing_id)
+        except HydrosAPIError as err:
+            _LOGGER.warning(
+                "Forced status refresh failed for %s: %s",
+                thing_id,
+                err,
+            )
+            return
+        if not isinstance(metadata, dict):
+            _LOGGER.debug(
+                "Forced status refresh for %s returned non-dict payload (%s)",
+                thing_id,
+                type(metadata).__name__,
+            )
+            return
+
+        # Update the metadata cache so downstream consumers see fresh data.
+        self._collective_cache[thing_id] = metadata
+
+        status_payload = metadata.get("status") or metadata.get("lastStatus")
+        if isinstance(status_payload, dict):
+            existing = self._collective_status.get(thing_id, {})
+            merged = self._merge_payloads(
+                existing.get("payload", {}),
+                status_payload,
+            )
+            self._collective_status[thing_id] = {
+                "payload": merged,
+                "received": datetime.now(timezone.utc),
+                "message_count": existing.get("message_count", 0),
+            }
+
+        async_dispatcher_send(
+            self._hass, self.signal_for_collective(thing_id), thing_id
+        )
 
     def signal_for_collective(self, thing_id: str) -> str:
         return SIGNAL_COLLECTIVE_UPDATED.format(
