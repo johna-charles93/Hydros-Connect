@@ -1,12 +1,12 @@
 {
   "domain": "hydros",
   "name": "HA-Hydros",
-  "version": "0.3.2",
-  "documentation": "https://github.com/Bitf1ip/ha-hydros",
-  "issue_tracker": "https://github.com/Bitf1ip/ha-hydros/issues",
-  "requirements": ["pyhydros==0.4.1"],
-  "dependencies": [],
   "codeowners": ["@Bitf1ip"],
   "config_flow": true,
-  "iot_class": "cloud_push"
+  "dependencies": [],
+  "documentation": "https://github.com/Bitf1ip/ha-hydros",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/Bitf1ip/ha-hydros/issues",
+  "requirements": ["pyhydros==0.4.1"],
+  "version": "0.3.2"
 }
