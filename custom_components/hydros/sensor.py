@@ -846,7 +846,7 @@ class HydrosSensor(SensorEntity):
             if not found:
                 return None
 
-            return round(total_raw_power / 100.0, 3)
+            return round(total_raw_power, 3)
 
         metadata: dict[str, Any] | None = None
         if self._section == "Output":
@@ -1009,7 +1009,7 @@ class HydrosSensor(SensorEntity):
                 raw_power = _coerce_numeric_value(ac_power.get("powerI"))
                 if raw_power is None:
                     continue
-                sources[str(node_id)] = round(float(raw_power) / 100.0, 3)
+                sources[str(node_id)] = round(float(raw_power), 3)
 
             if not sources:
                 return None
