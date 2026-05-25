@@ -829,6 +829,8 @@ class HydrosSensor(SensorEntity):
             if not isinstance(health, dict):
                 return None
 
+            power_scale = OUTPUT_VALUE_TRANSFORMS.get("powerI", (None, 1.0))[1]
+
             total_raw_power = 0.0
             found = False
             for node_payload in health.values():
@@ -846,7 +848,7 @@ class HydrosSensor(SensorEntity):
             if not found:
                 return None
 
-            return round(total_raw_power, 3)
+            return round(total_raw_power * power_scale, 3)
 
         metadata: dict[str, Any] | None = None
         if self._section == "Output":
@@ -999,6 +1001,8 @@ class HydrosSensor(SensorEntity):
             if not isinstance(health, dict):
                 return None
 
+            power_scale = OUTPUT_VALUE_TRANSFORMS.get("powerI", (None, 1.0))[1]
+
             sources: dict[str, float] = {}
             for node_id, node_payload in health.items():
                 if not isinstance(node_payload, dict):
@@ -1009,7 +1013,7 @@ class HydrosSensor(SensorEntity):
                 raw_power = _coerce_numeric_value(ac_power.get("powerI"))
                 if raw_power is None:
                     continue
-                sources[str(node_id)] = round(float(raw_power), 3)
+                sources[str(node_id)] = round(float(raw_power) * power_scale, 3)
 
             if not sources:
                 return None

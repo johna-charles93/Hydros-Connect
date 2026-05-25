@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 ## 0.3.4 - 2026-05-24
 
 ### Added
-- Add a new `XP8 Total Power` sensor sourced from MQTT health payloads (`health.*.acPower.powerI`) reported directly in watts (no additional scaling).
+- Add a new `XP8 Total Power` sensor sourced from MQTT health payloads (`health.*.acPower.powerI`), scaled by the existing `powerI` factor (`/10`) to report watts.
 
 ## 0.3.3 - 2026-05-22
 
