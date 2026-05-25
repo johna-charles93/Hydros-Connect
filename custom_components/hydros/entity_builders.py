@@ -281,6 +281,28 @@ def build_collective_debug_description(
     )
 
 
+def build_collective_xp8_power_description(
+    description_cls: Type[SensorEntityDescription],
+    *,
+    entry: ConfigEntry,
+    thing_id: str,
+    device_name: str,
+) -> SensorEntityDescription:
+    slug = slugify(f"{thing_id}-xp8-total-power")
+    return description_cls(
+        key=f"{entry.entry_id}-{thing_id}-{slug}",
+        name=f"{device_name} XP8 Total Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        thing_id=thing_id,
+        input_key=f"{thing_id}-xp8-total-power",
+        section="CollectiveXP8Power",
+        primary_key="powerI",
+        value_transform=None,
+    )
+
+
 def build_output_binary_description(
     description_cls: Type[BinarySensorEntityDescription],
     *,

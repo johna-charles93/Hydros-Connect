@@ -45,6 +45,7 @@ from .entity_builders import (
     build_collective_debug_description,
     build_collective_description,
     build_collective_mode_description,
+    build_collective_xp8_power_description,
     build_doser_reservoir_description,
     build_doser_today_description,
     build_input_sensor_description,
@@ -277,6 +278,16 @@ def _round_probe_value(value: float) -> float:
         return round(float(value), 2)
     except (TypeError, ValueError):
         return value
+
+def _coerce_numeric_value(candidate: Any) -> float | int | None:
+    if isinstance(candidate, (int, float)):
+        return candidate
+    if isinstance(candidate, str):
+        try:
+            return float(candidate)
+        except ValueError:
+            return None
+    return None
 
 
 def _map_triple_level(value: float | int) -> str:
@@ -672,6 +683,22 @@ class HydrosSensorManager:
                 ),
             )
 
+            xp8_power_description = build_collective_xp8_power_description(
+                HydrosSensorEntityDescription,
+                entry=self._entry,
+                thing_id=thing_id,
+                device_name=device_name,
+            )
+            descriptions[xp8_power_description.key] = (
+                xp8_power_description,
+                DeviceInfo(
+                    identifiers={(DOMAIN, thing_id)},
+                    name=device_name,
+                    manufacturer=manufacturer,
+                    model=model,
+                ),
+            )
+
             if thing_id not in self._subscribed:
                 try:
                     await self._hub.async_subscribe_collective_status(thing_id)
@@ -796,6 +823,31 @@ class HydrosSensor(SensorEntity):
             mode = payload.get("mode")
             return mode or "unknown"
 
+        if self._section == "CollectiveXP8Power":
+            payload = self._hub.get_collective_status_payload(self._thing_id) or {}
+            health = payload.get("health")
+            if not isinstance(health, dict):
+                return None
+
+            total_raw_power = 0.0
+            found = False
+            for node_payload in health.values():
+                if not isinstance(node_payload, dict):
+                    continue
+                ac_power = node_payload.get("acPower")
+                if not isinstance(ac_power, dict):
+                    continue
+                raw_power = _coerce_numeric_value(ac_power.get("powerI"))
+                if raw_power is None:
+                    continue
+                total_raw_power += float(raw_power)
+                found = True
+
+            if not found:
+                return None
+
+            return round(total_raw_power / 100.0, 3)
+
         metadata: dict[str, Any] | None = None
         if self._section == "Output":
             metadata = self._hub.get_output_metadata(self._thing_id, self._input_key)
@@ -851,7 +903,7 @@ class HydrosSensor(SensorEntity):
                     return override_state
 
             for key in ordered_keys:
-                numeric = _coerce_numeric(value.get(key))
+                numeric = _coerce_numeric_value(value.get(key))
                 if numeric is not None:
                     if self._section == "Output":
                         return _normalize_output_value(key, numeric, metadata)
@@ -939,6 +991,36 @@ class HydrosSensor(SensorEntity):
                 attrs["mqtt_json"] = json.dumps(mqtt, sort_keys=True)
             except (TypeError, ValueError):
                 attrs["mqtt_json"] = None
+            return attrs
+
+        if self._section == "CollectiveXP8Power":
+            payload = self._hub.get_collective_status_payload(self._thing_id) or {}
+            health = payload.get("health")
+            if not isinstance(health, dict):
+                return None
+
+            sources: dict[str, float] = {}
+            for node_id, node_payload in health.items():
+                if not isinstance(node_payload, dict):
+                    continue
+                ac_power = node_payload.get("acPower")
+                if not isinstance(ac_power, dict):
+                    continue
+                raw_power = _coerce_numeric_value(ac_power.get("powerI"))
+                if raw_power is None:
+                    continue
+                sources[str(node_id)] = round(float(raw_power) / 100.0, 3)
+
+            if not sources:
+                return None
+
+            attrs = {
+                "source_count": len(sources),
+                "sources": sources,
+            }
+            ts = self._hub.get_latest_status_ts(self._thing_id)
+            if ts:
+                attrs["last_update"] = ts.isoformat()
             return attrs
 
         if self._section == "DosedToday":
