@@ -5,6 +5,11 @@
 ## Summary
 Custom Home Assistant integration for Hydros controllers. It connects to the Hydros cloud API to expose inputs, outputs, dosing history, and device health in Home Assistant.
 
+This repository is a community fork based on the original HA-Hydros project by Bitf1ip:
+https://github.com/Bitf1ip/ha-hydros
+
+All credit for the original architecture and baseline integration belongs to the original creator.
+
 ![Example](dashboard.png)
 
 By default, this integration is monitoring-first. Remote control can be enabled explicitly in integration options.
@@ -16,6 +21,19 @@ By default, this integration is monitoring-first. Remote control can be enabled 
 🛡️Leverage Hydros' own controller features for such functions as they have built-in resiliency for network & power outages and built-in safeguards.
 
 Example of good usage for this integration includes: long term metrics, triggering alerts, automation to non life supporting 3rd party devices (e.g light, smart switch).
+
+## Attribution
+
+- Original project and maintainer: Bitf1ip, HA-Hydros
+- Original repository: https://github.com/Bitf1ip/ha-hydros
+- This fork extends the original integration with controller selection and optional remote control improvements while keeping monitoring-first behavior by default.
+
+## Known Limitations
+
+- Cloud dependency: internet and Hydros cloud API availability are required.
+- Output schemas can vary by Hydros model and firmware, so some output types may require additional compatibility updates.
+- Remote control is optional and disabled by default; users must explicitly enable it in integration options.
+- Home Assistant should not be treated as the primary safety controller for critical aquarium systems.
 
 ## Capabilities
 
