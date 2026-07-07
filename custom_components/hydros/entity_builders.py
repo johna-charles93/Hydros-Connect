@@ -15,6 +15,14 @@ from .types import coerce_int as _coerce_int
 from .types import is_variable_pump_output
 
 
+def build_output_display_name(output_meta: dict[str, Any], output_key: str) -> str:
+    raw_name = output_meta.get("friendlyName") or output_meta.get("name") or output_key
+    name = str(raw_name).strip() or str(output_key).strip()
+    if name.isdigit():
+        return f"Outlet {name}"
+    return name
+
+
 def build_input_sensor_description(
     description_cls: Type[SensorEntityDescription],
     *,
@@ -82,7 +90,7 @@ def build_output_sensor_description(
     output_payload_keys: tuple[str, ...],
     output_value_transforms: dict[str, tuple[str, float]],
 ) -> Optional[SensorEntityDescription]:
-    name = output_meta.get("friendlyName") or output_meta.get("name") or output_key
+    name = build_output_display_name(output_meta, output_key)
     full_name = f"{device_name} {name}" if device_name not in name else name
     slug = slugify(f"{thing_id}-output-{output_key}")
 
@@ -124,7 +132,7 @@ def build_output_power_description(
 ) -> Optional[SensorEntityDescription]:
     if not any(key in output_meta for key in ("minPower", "maxPower", "powerAlertLevel", "powerI")):
         return None
-    name = output_meta.get("friendlyName") or output_meta.get("name") or output_key
+    name = build_output_display_name(output_meta, output_key)
     full_name = f"{device_name} {name}" if device_name not in name else name
     slug = slugify(f"{thing_id}-power-{output_key}")
 
@@ -150,7 +158,7 @@ def build_doser_today_description(
     output_meta: dict[str, Any],
     device_name: str,
 ) -> SensorEntityDescription:
-    name = output_meta.get("friendlyName") or output_meta.get("name") or output_key
+    name = build_output_display_name(output_meta, output_key)
     full_name = f"{device_name} {name}" if device_name not in name else name
     slug = slugify(f"{thing_id}-dosed-today-{output_key}")
 
@@ -176,7 +184,7 @@ def build_doser_reservoir_description(
     output_meta: dict[str, Any],
     device_name: str,
 ) -> SensorEntityDescription:
-    name = output_meta.get("friendlyName") or output_meta.get("name") or output_key
+    name = build_output_display_name(output_meta, output_key)
     full_name = f"{device_name} {name}" if device_name not in name else name
     slug = slugify(f"{thing_id}-reservoir-{output_key}")
 
@@ -312,7 +320,7 @@ def build_output_binary_description(
     output_meta: dict[str, Any],
     device_name: str,
 ) -> BinarySensorEntityDescription:
-    name = output_meta.get("friendlyName") or output_meta.get("name") or output_key
+    name = build_output_display_name(output_meta, output_key)
     display_name = f"{device_name} {name}" if device_name not in name else name
     slug = slugify(f"{thing_id}-binary-state-{output_key}")
 

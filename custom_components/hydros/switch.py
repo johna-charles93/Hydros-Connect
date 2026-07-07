@@ -19,6 +19,7 @@ from .const import (
     DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS,
     DOMAIN,
 )
+from .entity_builders import build_output_display_name
 from .hydros_hub import HydrosHub
 from .sensor import OUTPUT_STATE_ALIASES, _coerce_int, _map_output_state_label
 
@@ -92,7 +93,7 @@ async def async_setup_entry(
             if capabilities.get("supports_percent_control"):
                 continue
 
-            name = output_meta.get("friendlyName") or output_meta.get("name") or output_key
+            name = build_output_display_name(output_meta, output_key)
             slug = slugify(f"{thing_id}-output-switch-{output_key}")
 
             description = HydrosOutputSwitchDescription(

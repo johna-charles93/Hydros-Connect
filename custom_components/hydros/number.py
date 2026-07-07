@@ -15,6 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import slugify
 
 from .const import CONF_ENABLE_REMOTE_CONTROL, DOMAIN
+from .entity_builders import build_output_display_name
 from .hydros_hub import HydrosHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ async def async_setup_entry(
             if not capabilities.get("supports_percent_control"):
                 continue
 
-            name = output_meta.get("friendlyName") or output_meta.get("name") or output_key
+            name = build_output_display_name(output_meta, output_key)
             slug = slugify(f"{thing_id}-{output_key}-pump-speed")
             description = HydrosPumpSpeedNumberDescription(
                 key=f"{entry.entry_id}-{thing_id}-{slug}",
@@ -152,7 +153,7 @@ class HydrosPumpSpeedNumber(NumberEntity):
         payload = self._hub.get_output_payload(self._thing_id, self._output_key) or {}
         raw = payload.get("valueState")
         try:
-            return float(raw)
+            return round(float(raw) / 100.0, 3)
         except (TypeError, ValueError):
             return None
 

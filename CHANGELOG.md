@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.3.9 - 2026-07-07
+
+### Fixed
+- Normalize variable-pump number entities back to a true 0-100% display range in Home Assistant controls and history.
+- Rename numeric-only Hydros outputs to `Outlet N` so XP8-style numbered outlets are clearer in cards, controls, and activity logs.
+
 ## 0.3.8 - 2026-07-07
 
 ### Changed
