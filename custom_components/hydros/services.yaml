@@ -1,0 +1,91 @@
+set_output_state:
+  name: Set output state
+  description: Set a Hydros output state to off, on, auto, or a raw numeric value.
+  fields:
+    thing_id:
+      name: Thing ID
+      description: Hydros collective/thing identifier.
+      required: true
+      selector:
+        text:
+    output_key:
+      name: Output key
+      description: Hydros output name/key.
+      required: true
+      selector:
+        text:
+    state:
+      name: State
+      description: Output state (off, on, auto) or an integer value.
+      required: true
+      example: on
+      selector:
+        text:
+
+set_pump_speed:
+  name: Set pump speed
+  description: Set variable pump output speed percentage.
+  fields:
+    thing_id:
+      name: Thing ID
+      required: true
+      selector:
+        text:
+    output_key:
+      name: Output key
+      required: true
+      selector:
+        text:
+    percent:
+      name: Percent
+      description: Pump speed percent from 0 to 100.
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          mode: box
+
+change_mode:
+  name: Change mode
+  description: Change Hydros collective mode, for example Feeding or Normal.
+  fields:
+    thing_id:
+      name: Thing ID
+      required: true
+      selector:
+        text:
+    mode:
+      name: Mode
+      description: Target mode name exactly as defined in Hydros.
+      required: true
+      example: Feeding
+      selector:
+        text:
+
+manual_dose:
+  name: Manual dose
+  description: Dose a target amount in ml by turning a doser output on for a computed duration.
+  fields:
+    thing_id:
+      name: Thing ID
+      required: true
+      selector:
+        text:
+    output_key:
+      name: Output key
+      description: Doser output name/key.
+      required: true
+      selector:
+        text:
+    amount_ml:
+      name: Amount (ml)
+      description: Dose amount in milliliters.
+      required: true
+      selector:
+        number:
+          min: 0.01
+          max: 1000
+          step: 0.01
+          mode: box

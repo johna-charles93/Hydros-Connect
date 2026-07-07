@@ -10,6 +10,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
@@ -399,6 +400,109 @@ class HydrosHub:
                     return api.change_mode(thing_id=thing_id, mode_id=mode)
 
         await self._hass.async_add_executor_job(_change_mode)
+
+    async def async_set_output_state(self, thing_id: str, output_name: str, state: int | str) -> None:
+        """Set a Hydros output state via pyhydros MQTT command."""
+        if not thing_id or not output_name:
+            return
+
+        api = await self._hass.async_add_executor_job(self._ensure_client)
+
+        def _set_output_state() -> Any:
+            try:
+                return api.set_output_state(thing_id, output_name, state)
+            except TypeError:
+                return api.set_output_state(
+                    thing_id=thing_id,
+                    output_name=output_name,
+                    state=state,
+                )
+
+        await self._hass.async_add_executor_job(_set_output_state)
+        self._optimistically_update_output_state(thing_id, output_name, state)
+
+    async def async_set_pump_speed(self, thing_id: str, output_name: str, percent: float) -> None:
+        """Set variable-pump speed in percent (0-100)."""
+        speed = max(0.0, min(100.0, float(percent)))
+        state_value = int(round(speed * 100.0))
+        await self.async_set_output_state(thing_id, output_name, state_value)
+
+    async def async_manual_dose(self, thing_id: str, output_name: str, amount_ml: float) -> None:
+        """Run a manual dose by turning a doser on for a computed duration.
+
+        This requires the output metadata to contain a positive flowRate field.
+        """
+        if amount_ml <= 0:
+            raise HomeAssistantError("amount_ml must be greater than 0")
+
+        output_meta = self.get_output_metadata(thing_id, output_name) or {}
+        raw_flow_rate = output_meta.get("flowRate")
+        try:
+            # Hydros flowRate is reported in tenths of ml/min in config payloads.
+            flow_rate_ml_per_min = float(raw_flow_rate) / 10.0
+        except (TypeError, ValueError):
+            flow_rate_ml_per_min = 0.0
+
+        if flow_rate_ml_per_min <= 0:
+            raise HomeAssistantError(
+                f"Output {output_name} is missing a valid flowRate; cannot compute manual dose duration"
+            )
+
+        duration_seconds = (float(amount_ml) / flow_rate_ml_per_min) * 60.0
+        duration_seconds = max(0.5, duration_seconds)
+
+        await self.async_set_output_state(thing_id, output_name, "on")
+        try:
+            await asyncio.sleep(duration_seconds)
+        finally:
+            await self.async_set_output_state(thing_id, output_name, "off")
+
+    @callback
+    def _optimistically_update_output_state(self, thing_id: str, output_name: str, state: int | str) -> None:
+        """Update in-memory payload for snappier entity updates after command sends."""
+        state_aliases = {"off": 0, "on": 1, "auto": -1}
+
+        if isinstance(state, str):
+            normalized = state_aliases.get(state.strip().lower())
+            if normalized is None:
+                return
+            state_value = normalized
+        else:
+            try:
+                state_value = int(state)
+            except (TypeError, ValueError):
+                return
+
+        record = self._collective_status.get(thing_id) or {
+            "payload": {},
+            "received": None,
+            "message_count": 0,
+        }
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            payload = {}
+
+        outputs = payload.get("Output")
+        if not isinstance(outputs, dict):
+            outputs = payload.get("output")
+        if not isinstance(outputs, dict):
+            outputs = {}
+            payload["Output"] = outputs
+
+        output_payload = outputs.get(output_name)
+        if not isinstance(output_payload, dict):
+            output_payload = {}
+
+        output_payload["valueState"] = state_value
+        output_payload["state"] = state_value
+        outputs[output_name] = output_payload
+
+        record["payload"] = payload
+        record["received"] = datetime.now(timezone.utc)
+        record["message_count"] = int(record.get("message_count", 0)) + 1
+        self._collective_status[thing_id] = record
+        self._ensure_watchdog(thing_id)
+        async_dispatcher_send(self._hass, self.signal_for_collective(thing_id), thing_id)
 
     @callback
     def invalidate_collective_config(self, thing_id: str) -> None:

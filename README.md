@@ -7,7 +7,7 @@ Custom Home Assistant integration for Hydros controllers. It connects to the Hyd
 
 ![Example](dashboard.png)
 
-This integration is strictly designed for monitoring.
+By default, this integration is monitoring-first. Remote control can be enabled explicitly in integration options.
 
 ⚠️ DO NOT rely on this integration's automations for life-critical functions (e.g temperature control, pumps) or when equipment/property damage can occur (e.g flood).
 
@@ -20,6 +20,12 @@ Example of good usage for this integration includes: long term metrics, triggeri
 ## Capabilities
 
 - **Config flow**: Username/password login and collective or standalone selection.
+- **Remote control (optional)**:
+  - Collective mode control via a select entity.
+  - Binary output control via switch entities.
+  - Variable pump speed control via number entities (0-100%).
+  - Manual service calls for output state, pump speed, mode changes, and manual dosing.
+  - Requires enabling **Remote control** in integration options and accepting the disclaimer.
 - **Sensors**:
   - Hydros inputs (temp, probe, triple-level, etc.) with units and transforms.
   - Output measurements (power, voltage, current, frequency, reservoir where present).
@@ -36,6 +42,7 @@ Example of good usage for this integration includes: long term metrics, triggeri
 ## Notes
 - Credentials are stored in Home Assistant config entries.
 - Debug samples are stored in memory (not persisted). It may contain sensitive information: Anonymize / share only a subset of the information for troubleshooting purpose.
+- Manual dose service computes run time from the doser flowRate metadata and toggles the output on, then off.
 
 ## ⚠️ Safety Warning & Disclaimer 
 
