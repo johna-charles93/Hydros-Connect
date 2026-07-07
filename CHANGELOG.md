@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.3.7 - 2026-07-07
+
+### Changed
+- Replace output entity classification with capability-map driven logic that combines config metadata and live payload behavior.
+- Update switch, number, binary sensor, and output sensor creation to use explicit per-output capability flags (`supports_binary_control`, `supports_percent_control`, `is_doser`) instead of direct type/family checks.
+
 ## 0.3.6 - 2026-07-07
 
 ### Added

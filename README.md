@@ -39,6 +39,7 @@ Example of good usage for this integration includes: long term metrics, triggeri
 ## Capabilities
 
 - **Config flow**: Username/password login and collective or standalone selection.
+- **Capability-map entity modeling**: Output entities are derived from per-output capability flags built from config + live payload behavior.
 - **Remote control (optional)**:
   - Collective mode control via a select entity.
   - Binary output control via switch entities.

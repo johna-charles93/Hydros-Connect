@@ -21,7 +21,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .hydros_hub import HydrosHub
-from .types import is_binary_output, is_doser_output
 from .entity_builders import build_output_binary_description, build_rope_leak_description
 from .sensor import (
     OUTPUT_STATE_ALIASES,
@@ -237,10 +236,16 @@ class HydrosBinarySensorManager:
             outputs = config.get("Output")
             if isinstance(outputs, dict):
                 for output_key, output_meta in outputs.items():
-                    if not is_binary_output(output_meta):
+                    if not isinstance(output_meta, dict):
                         continue
 
-                    if is_doser_output(output_meta):
+                    capabilities = self._hub.get_output_capabilities(thing_id, output_key)
+                    if not capabilities.get("supports_binary_control"):
+                        continue
+                    if capabilities.get("supports_percent_control"):
+                        continue
+
+                    if capabilities.get("is_doser"):
                         self._doser_outputs.add((thing_id, output_key))
 
                     description = build_output_binary_description(
@@ -427,7 +432,8 @@ class HydrosBinarySensor(BinarySensorEntity):
         if label:
             attrs["state_label"] = label
 
-        if is_doser_output(metadata):
+        capabilities = self._hub.get_output_capabilities(self._thing_id, self._output_key)
+        if capabilities.get("is_doser"):
             updated = self._hub.get_dosing_total_updated(
                 self._thing_id,
                 self._output_key,

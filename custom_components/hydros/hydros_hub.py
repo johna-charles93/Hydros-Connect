@@ -15,6 +15,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
+from .types import get_output_capabilities
 
 from .const import (
     CONF_COLLECTIVES,
@@ -1114,6 +1115,11 @@ class HydrosHub:
             if isinstance(data, dict):
                 return data
         return None
+
+    def get_output_capabilities(self, thing_id: str, output_key: str) -> dict[str, bool]:
+        meta = self.get_output_metadata(thing_id, output_key) or {}
+        payload = self.get_output_payload(thing_id, output_key) or {}
+        return get_output_capabilities(meta, payload)
 
     def get_output_value(self, thing_id: str, output_key: str) -> Any:
         payload = self.get_output_payload(thing_id, output_key)

@@ -21,7 +21,6 @@ from .const import (
 )
 from .hydros_hub import HydrosHub
 from .sensor import OUTPUT_STATE_ALIASES, _coerce_int, _map_output_state_label
-from .types import is_binary_output
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,7 +86,10 @@ async def async_setup_entry(
         for output_key, output_meta in outputs.items():
             if not isinstance(output_meta, dict):
                 continue
-            if not is_binary_output(output_meta):
+            capabilities = hub.get_output_capabilities(thing_id, output_key)
+            if not capabilities.get("supports_binary_control"):
+                continue
+            if capabilities.get("supports_percent_control"):
                 continue
 
             name = output_meta.get("friendlyName") or output_meta.get("name") or output_key

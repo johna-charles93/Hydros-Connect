@@ -35,8 +35,6 @@ from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN
 from .hydros_hub import HydrosHub
 from .types import (
-    is_binary_output,
-    is_doser_output,
     is_variable_pump_output,
     coerce_int as _coerce_int,
 )
@@ -537,7 +535,9 @@ class HydrosSensorManager:
                     if not isinstance(output_meta, dict):
                         continue
 
-                    if is_doser_output(output_meta):
+                    capabilities = self._hub.get_output_capabilities(thing_id, output_key)
+
+                    if capabilities.get("is_doser"):
                         history_description = build_doser_today_description(
                             HydrosSensorEntityDescription,
                             entry=self._entry,
@@ -593,7 +593,9 @@ class HydrosSensorManager:
                             ),
                         )
 
-                    if is_binary_output(output_meta):
+                    if capabilities.get("supports_binary_control") and not capabilities.get(
+                        "supports_percent_control"
+                    ):
                         continue
 
                     description = build_output_sensor_description(
