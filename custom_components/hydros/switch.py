@@ -191,6 +191,7 @@ class HydrosOutputSwitch(SwitchEntity):
         metadata = self._hub.get_output_metadata(self._thing_id, self._output_key) or {}
 
         attrs: dict[str, Any] = {
+            "thing_id": self._thing_id,
             "output_key": self._output_key,
         }
 

@@ -232,6 +232,7 @@ class HydrosModeSelect(SelectEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         attrs: dict[str, Any] = {
+            "thing_id": self._thing_id,
             "command_cooldown_seconds": DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS,
         }
         command_status = self._hub.get_command_status(

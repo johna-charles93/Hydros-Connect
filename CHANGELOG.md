@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.3.8 - 2026-07-07
+
+### Changed
+- Upgrade service UX to support `entity_id` targeting for mode/output/doser actions while preserving `thing_id` and `output_key` backward compatibility.
+- Add Hydros entity selectors in `services.yaml` for safer, easier service calls from Home Assistant UI.
+
 ## 0.3.7 - 2026-07-07
 
 ### Changed

@@ -1,17 +1,27 @@
 set_output_state:
   name: Set output state
-  description: Set a Hydros output state to off, on, auto, or a raw numeric value.
+  description: Set a Hydros output state to off, on, auto, or a raw numeric value. Provide either entity_id or thing_id/output_key.
   fields:
+    entity_id:
+      name: Output entity
+      description: Hydros switch/number entity to target.
+      required: false
+      selector:
+        entity:
+          integration: hydros
+          domain:
+            - switch
+            - number
     thing_id:
       name: Thing ID
       description: Hydros collective/thing identifier.
-      required: true
+      required: false
       selector:
         text:
     output_key:
       name: Output key
       description: Hydros output name/key.
-      required: true
+      required: false
       selector:
         text:
     state:
@@ -24,16 +34,24 @@ set_output_state:
 
 set_pump_speed:
   name: Set pump speed
-  description: Set variable pump output speed percentage.
+  description: Set variable pump output speed percentage. Provide either entity_id or thing_id/output_key.
   fields:
+    entity_id:
+      name: Pump entity
+      description: Hydros pump number entity to target.
+      required: false
+      selector:
+        entity:
+          integration: hydros
+          domain: number
     thing_id:
       name: Thing ID
-      required: true
+      required: false
       selector:
         text:
     output_key:
       name: Output key
-      required: true
+      required: false
       selector:
         text:
     percent:
@@ -49,11 +67,19 @@ set_pump_speed:
 
 change_mode:
   name: Change mode
-  description: Change Hydros collective mode, for example Feeding or Normal.
+  description: Change Hydros collective mode, for example Feeding or Normal. Provide either entity_id or thing_id.
   fields:
+    entity_id:
+      name: Mode entity
+      description: Hydros mode select entity to target.
+      required: false
+      selector:
+        entity:
+          integration: hydros
+          domain: select
     thing_id:
       name: Thing ID
-      required: true
+      required: false
       selector:
         text:
     mode:
@@ -66,17 +92,25 @@ change_mode:
 
 manual_dose:
   name: Manual dose
-  description: Dose a target amount in ml by turning a doser output on for a computed duration.
+  description: Dose a target amount in ml by turning a doser output on for a computed duration. Provide either entity_id or thing_id/output_key.
   fields:
+    entity_id:
+      name: Doser entity
+      description: Hydros doser switch entity to target.
+      required: false
+      selector:
+        entity:
+          integration: hydros
+          domain: switch
     thing_id:
       name: Thing ID
-      required: true
+      required: false
       selector:
         text:
     output_key:
       name: Output key
       description: Doser output name/key.
-      required: true
+      required: false
       selector:
         text:
     amount_ml:

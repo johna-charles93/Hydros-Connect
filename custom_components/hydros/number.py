@@ -158,7 +158,10 @@ class HydrosPumpSpeedNumber(NumberEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        attrs: dict[str, Any] = {"output_key": self._output_key}
+        attrs: dict[str, Any] = {
+            "thing_id": self._thing_id,
+            "output_key": self._output_key,
+        }
         command_status = self._hub.get_command_status(
             self._thing_id,
             "output",

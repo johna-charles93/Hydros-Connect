@@ -45,6 +45,7 @@ Example of good usage for this integration includes: long term metrics, triggeri
   - Binary output control via switch entities.
   - Variable pump speed control via number entities (0-100%).
   - Manual service calls for output state, pump speed, mode changes, and manual dosing.
+  - Service actions support `entity_id` selectors (recommended) as well as legacy `thing_id`/`output_key` fields.
   - Entity attributes expose command lifecycle (`pending`, `api_acked`, `confirmed`, `timed_out`, `failed`).
   - Command guardrails: output/mode cooldowns and a max computed manual-dose runtime.
   - Requires enabling **Remote control** in integration options and accepting the disclaimer.
