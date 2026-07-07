@@ -152,7 +152,7 @@ class HydrosPumpSpeedNumber(NumberEntity):
         payload = self._hub.get_output_payload(self._thing_id, self._output_key) or {}
         raw = payload.get("valueState")
         try:
-            return round(float(raw) / 100.0, 1)
+            return float(raw)
         except (TypeError, ValueError):
             return None
 

@@ -24,6 +24,14 @@ BINARY_OUTPUT_TYPES: set[str] = {
     "ato",
     "automaticwaterchange",
     "automatic_water_change",
+    # Standard outlet / relay types found on Hydros XP8 and similar hardware
+    "outlet",
+    "relay",
+    "switch",
+    "plug",
+    "smartplug",
+    "poweroutlet",
+    "power_outlet",
 }
 
 BINARY_OUTPUT_FAMILIES: set[str] = {
@@ -40,6 +48,12 @@ BINARY_OUTPUT_FAMILIES: set[str] = {
     "feeder",
     "ato",
     "awc",
+    # Standard outlet / relay families
+    "outlet",
+    "relay",
+    "switch",
+    "plug",
+    "power",
 }
 
 VARIABLE_PUMP_OUTPUT_TYPES: set[str] = {
@@ -68,12 +82,26 @@ def is_binary_output(output_meta: dict[str, Any] | None) -> bool:
         return False
     type_value = str(output_meta.get("type") or "").strip().lower()
     family_value = str(output_meta.get("family") or "").strip().lower()
+
+    # Variable pumps are never binary outputs
+    if type_value and type_value in VARIABLE_PUMP_OUTPUT_TYPES:
+        return False
+    if family_value and family_value in VARIABLE_PUMP_OUTPUT_FAMILIES:
+        return False
+
     if type_value and type_value in BINARY_OUTPUT_TYPES:
         return True
     if family_value and family_value in BINARY_OUTPUT_FAMILIES:
         return True
     if "doser" in type_value:
         return True
+
+    # Fallback: any output with a non-empty type or family that isn't a variable
+    # pump is assumed to be an on/off controllable output (e.g. unknown outlet
+    # types from new Hydros hardware revisions).
+    if type_value or family_value:
+        return True
+
     return False
 
 
