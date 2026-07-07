@@ -635,6 +635,66 @@ class HydrosSensorManager:
                 ),
             )
 
+            api_status_description = HydrosSensorEntityDescription(
+                key=f"{self._entry.entry_id}-{thing_id}-api-status",
+                name=f"{device_name} API Status",
+                native_unit_of_measurement=None,
+                device_class=None,
+                state_class=None,
+                thing_id=thing_id,
+                input_key=f"{thing_id}-api-status",
+                section="CollectiveApiStatus",
+            )
+            descriptions[api_status_description.key] = (
+                api_status_description,
+                DeviceInfo(
+                    identifiers={(DOMAIN, thing_id)},
+                    name=device_name,
+                    manufacturer=manufacturer,
+                    model=model,
+                ),
+            )
+
+            mqtt_age_description = HydrosSensorEntityDescription(
+                key=f"{self._entry.entry_id}-{thing_id}-mqtt-age",
+                name=f"{device_name} MQTT Age",
+                native_unit_of_measurement="s",
+                device_class=None,
+                state_class=SensorStateClass.MEASUREMENT,
+                thing_id=thing_id,
+                input_key=f"{thing_id}-mqtt-age",
+                section="CollectiveMqttAge",
+            )
+            descriptions[mqtt_age_description.key] = (
+                mqtt_age_description,
+                DeviceInfo(
+                    identifiers={(DOMAIN, thing_id)},
+                    name=device_name,
+                    manufacturer=manufacturer,
+                    model=model,
+                ),
+            )
+
+            pending_commands_description = HydrosSensorEntityDescription(
+                key=f"{self._entry.entry_id}-{thing_id}-pending-commands",
+                name=f"{device_name} Pending Commands",
+                native_unit_of_measurement=None,
+                device_class=None,
+                state_class=SensorStateClass.MEASUREMENT,
+                thing_id=thing_id,
+                input_key=f"{thing_id}-pending-commands",
+                section="CollectivePendingCommands",
+            )
+            descriptions[pending_commands_description.key] = (
+                pending_commands_description,
+                DeviceInfo(
+                    identifiers={(DOMAIN, thing_id)},
+                    name=device_name,
+                    manufacturer=manufacturer,
+                    model=model,
+                ),
+            )
+
             mode_description = build_collective_mode_description(
                 HydrosSensorEntityDescription,
                 entry=self._entry,
@@ -740,7 +800,12 @@ class HydrosSensor(SensorEntity):
         self._primary_key = description.primary_key
         self._value_transform = description.value_transform
         self._last_health_state: str | None = None
-        self._attr_should_poll = description.section == "Collective"
+        self._attr_should_poll = description.section in {
+            "Collective",
+            "CollectiveMqttAge",
+            "CollectiveApiStatus",
+            "CollectivePendingCommands",
+        }
         self._self_dispatch = False
         self._remove_dispatcher: Callable[[], None] | None = None
 
@@ -760,7 +825,12 @@ class HydrosSensor(SensorEntity):
         self._section = description.section
         self._primary_key = description.primary_key
         self._value_transform = description.value_transform
-        self._attr_should_poll = description.section == "Collective"
+        self._attr_should_poll = description.section in {
+            "Collective",
+            "CollectiveMqttAge",
+            "CollectiveApiStatus",
+            "CollectivePendingCommands",
+        }
         if self._section == "Collective":
             self._last_health_state = None
         self._self_dispatch = False
@@ -775,7 +845,12 @@ class HydrosSensor(SensorEntity):
     def available(self) -> bool:
         if not self._thing_id:
             return False
-        if self._section == "Collective":
+        if self._section in {
+            "Collective",
+            "CollectiveApiStatus",
+            "CollectiveMqttAge",
+            "CollectivePendingCommands",
+        }:
             return True
         return self._collective_is_online()
 
@@ -796,6 +871,19 @@ class HydrosSensor(SensorEntity):
             if self._last_health_state is None:
                 self._last_health_state = self._compute_collective_health_state()
             return self._last_health_state
+
+        if self._section == "CollectiveApiStatus":
+            health = self._hub.get_api_health()
+            return health.get("status")
+
+        if self._section == "CollectiveMqttAge":
+            last_ts = self._hub.get_latest_status_ts(self._thing_id)
+            if not last_ts:
+                return None
+            return round((datetime.now(timezone.utc) - last_ts).total_seconds(), 3)
+
+        if self._section == "CollectivePendingCommands":
+            return self._hub.get_pending_command_count(self._thing_id)
 
         if self._section == "CollectiveAlerts":
             alerts = self._collect_alert_messages()
@@ -943,6 +1031,35 @@ class HydrosSensor(SensorEntity):
             attrs["heartbeat_stale_after_seconds"] = COLLECTIVE_HEARTBEAT_STALE_SECONDS
 
             return attrs or None
+
+        if self._section == "CollectiveApiStatus":
+            health = self._hub.get_api_health()
+            attrs: dict[str, Any] = {
+                "status": health.get("status"),
+            }
+            if health.get("last_success"):
+                attrs["last_success"] = health["last_success"].isoformat()
+            if health.get("last_error"):
+                attrs["last_error"] = health["last_error"]
+            if health.get("last_error_at"):
+                attrs["last_error_at"] = health["last_error_at"].isoformat()
+            return attrs
+
+        if self._section == "CollectiveMqttAge":
+            attrs: dict[str, Any] = {}
+            last_ts = self._hub.get_latest_status_ts(self._thing_id)
+            if last_ts:
+                delta = (datetime.now(timezone.utc) - last_ts).total_seconds()
+                attrs["last_message"] = last_ts.isoformat()
+                attrs["mqtt_stale"] = delta > COLLECTIVE_HEARTBEAT_STALE_SECONDS
+                attrs["offline_threshold_seconds"] = COLLECTIVE_HEARTBEAT_OFFLINE_SECONDS
+                attrs["stale_threshold_seconds"] = COLLECTIVE_HEARTBEAT_STALE_SECONDS
+            return attrs or None
+
+        if self._section == "CollectivePendingCommands":
+            return {
+                "pending_count": self._hub.get_pending_command_count(self._thing_id),
+            }
 
         if self._section == "CollectiveMode":
             payload = self._hub.get_collective_status_payload(self._thing_id) or {}
@@ -1129,20 +1246,26 @@ class HydrosSensor(SensorEntity):
         await super().async_will_remove_from_hass()
 
     async def async_update(self) -> None:
-        if self._section != "Collective":
+        if self._section not in {
+            "Collective",
+            "CollectiveMqttAge",
+            "CollectiveApiStatus",
+            "CollectivePendingCommands",
+        }:
             return
 
-        current = self._compute_collective_health_state()
-        previous = self._last_health_state
-        self._last_health_state = current
+        if self._section == "Collective":
+            current = self._compute_collective_health_state()
+            previous = self._last_health_state
+            self._last_health_state = current
 
-        if current != previous and self._thing_id:
-            self._self_dispatch = True
-            async_dispatcher_send(
-                self.hass,
-                self._hub.signal_for_collective(self._thing_id),
-                self._thing_id,
-            )
+            if current != previous and self._thing_id:
+                self._self_dispatch = True
+                async_dispatcher_send(
+                    self.hass,
+                    self._hub.signal_for_collective(self._thing_id),
+                    self._thing_id,
+                )
 
     def _handle_signal(self, _: str) -> None:
         # Ensure state updates happen on the Home Assistant event loop thread

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Any, Callable
 
 from homeassistant.components.number import NumberEntity, NumberEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -155,6 +155,18 @@ class HydrosPumpSpeedNumber(NumberEntity):
             return float(raw)
         except (TypeError, ValueError):
             return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        attrs: dict[str, Any] = {"output_key": self._output_key}
+        command_status = self._hub.get_command_status(
+            self._thing_id,
+            "output",
+            self._output_key,
+        )
+        if command_status:
+            attrs["last_command"] = command_status
+        return attrs
 
     async def async_set_native_value(self, value: float) -> None:
         await self._hub.async_set_pump_speed(self._thing_id, self._output_key, float(value))

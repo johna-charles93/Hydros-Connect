@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.3.6 - 2026-07-07
+
+### Added
+- Add control command lifecycle tracking in `HydrosHub` and expose command status (`pending`, `api_acked`, `confirmed`, `timed_out`, `failed`) in mode, switch, and pump entity attributes.
+- Add collective diagnostic sensors for API status, MQTT age, and pending command count.
+
+### Changed
+- Add control safety guardrails: output command cooldown, mode-change cooldown, and maximum computed manual-dose duration.
+- Expand README documentation with diagnostics behavior and control safety notes.
+
 ## 0.3.5 - 2026-07-07
 
 ### Added

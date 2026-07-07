@@ -13,7 +13,11 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_ENABLE_REMOTE_CONTROL, DOMAIN
+from .const import (
+    CONF_ENABLE_REMOTE_CONTROL,
+    DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS,
+    DOMAIN,
+)
 from .hydros_hub import HydrosHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -224,6 +228,22 @@ class HydrosModeSelect(SelectEntity):
             return mode_str
 
         return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        attrs: dict[str, Any] = {
+            "command_cooldown_seconds": DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS,
+        }
+        command_status = self._hub.get_command_status(
+            self._thing_id,
+            "mode",
+            "mode",
+        )
+        if command_status:
+            attrs["last_command"] = command_status
+        if self._option_to_mode:
+            attrs["option_to_mode"] = self._option_to_mode
+        return attrs
 
     async def async_select_option(self, option: str) -> None:
         mode_value = self._option_to_mode.get(option, option)

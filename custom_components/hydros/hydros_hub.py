@@ -4,6 +4,7 @@ import asyncio
 import logging
 import uuid
 import requests
+from dataclasses import dataclass
 from collections.abc import Callable
 from datetime import datetime, timezone, timedelta
 from typing import Any
@@ -20,6 +21,10 @@ from .const import (
     CONF_PASSWORD,
     CONF_REGION,
     CONF_USERNAME,
+    DEFAULT_COMMAND_CONFIRM_TIMEOUT,
+    DEFAULT_MAX_MANUAL_DOSE_SECONDS,
+    DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS,
+    DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS,
     DEFAULT_REGION,
     DEFAULT_WATCHDOG_INACTIVITY,
     SIGNAL_COLLECTIVE_UPDATED,
@@ -38,6 +43,23 @@ except ImportError as err:  # pragma: no cover
     _IMPORT_ERROR = err
 else:
     _IMPORT_ERROR = None
+
+
+@dataclass
+class HydrosCommandStatus:
+    command_id: str
+    command_type: str
+    thing_id: str
+    target_key: str
+    expected_value: Any
+    issued_at: datetime
+    api_ack_at: datetime | None = None
+    confirmed_at: datetime | None = None
+    status: str = "pending"
+    error: str | None = None
+    last_observed_value: Any = None
+
+
 def _extract_profile_thing_id(thing: dict[str, Any]) -> str | None:
     """Return preferred Hydros identifier from profile payload."""
     thing_name = thing.get("thingName")
@@ -77,6 +99,12 @@ class HydrosHub:
         self._username: str = entry.data[CONF_USERNAME]
         self._password: str = entry.data[CONF_PASSWORD]
         self._region: str = entry.data.get(CONF_REGION, DEFAULT_REGION)
+        self._api_last_success: datetime | None = None
+        self._api_last_error: str | None = None
+        self._api_last_error_at: datetime | None = None
+        self._control_commands: dict[tuple[str, str, str], HydrosCommandStatus] = {}
+        self._last_output_command_at: dict[tuple[str, str], datetime] = {}
+        self._last_mode_command_at: dict[str, datetime] = {}
         self.collective_ids: list[str] = []
         for thing_id in entry.data.get(CONF_COLLECTIVES, []):
             if not isinstance(thing_id, str):
@@ -119,6 +147,128 @@ class HydrosHub:
         self._status_handlers.clear()
         self._mqtt_primary = None
 
+    @staticmethod
+    def _utcnow() -> datetime:
+        return datetime.now(timezone.utc)
+
+    def _note_api_success(self) -> None:
+        self._api_last_success = self._utcnow()
+
+    def _note_api_error(self, err: Exception) -> None:
+        self._api_last_error = str(err)
+        self._api_last_error_at = self._utcnow()
+
+    def _start_command(
+        self,
+        *,
+        command_type: str,
+        thing_id: str,
+        target_key: str,
+        expected_value: Any,
+    ) -> HydrosCommandStatus:
+        command = HydrosCommandStatus(
+            command_id=uuid.uuid4().hex,
+            command_type=command_type,
+            thing_id=thing_id,
+            target_key=target_key,
+            expected_value=expected_value,
+            issued_at=self._utcnow(),
+            status="pending",
+        )
+        self._control_commands[(thing_id, command_type, target_key)] = command
+        return command
+
+    def _mark_command_api_ack(self, command: HydrosCommandStatus) -> None:
+        command.api_ack_at = self._utcnow()
+        command.status = "api_acked"
+
+    def _mark_command_failed(self, command: HydrosCommandStatus, err: Exception) -> None:
+        command.status = "failed"
+        command.error = str(err)
+        command.api_ack_at = command.api_ack_at or self._utcnow()
+
+    def _mark_command_timed_out(self, command: HydrosCommandStatus) -> None:
+        command.status = "timed_out"
+
+    def _normalize_output_state(self, value: Any) -> int | None:
+        state_aliases = {"off": 0, "on": 1, "auto": -1}
+        if isinstance(value, str):
+            mapped = state_aliases.get(value.strip().lower())
+            if mapped is not None:
+                return mapped
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _output_state_matches_expected(self, expected: Any, observed: Any) -> bool:
+        expected_int = self._normalize_output_state(expected)
+        observed_int = self._normalize_output_state(observed)
+        if expected_int is not None and observed_int is not None:
+            return expected_int == observed_int
+        return str(expected).strip().lower() == str(observed).strip().lower()
+
+    def _reconcile_commands(self, thing_id: str, payload: dict[str, Any]) -> None:
+        now = self._utcnow()
+        for key, command in list(self._control_commands.items()):
+            cmd_thing, cmd_type, cmd_target = key
+            if cmd_thing != thing_id:
+                continue
+
+            if command.status in {"confirmed", "failed", "timed_out"}:
+                continue
+
+            command_age = (now - command.issued_at).total_seconds()
+            if command_age > DEFAULT_COMMAND_CONFIRM_TIMEOUT:
+                self._mark_command_timed_out(command)
+                continue
+
+            if cmd_type == "mode":
+                observed_mode = payload.get("mode")
+                command.last_observed_value = observed_mode
+                if observed_mode is None:
+                    continue
+                if str(observed_mode).strip().lower() == str(command.expected_value).strip().lower():
+                    command.status = "confirmed"
+                    command.confirmed_at = now
+                continue
+
+            outputs = payload.get("Output") or payload.get("output")
+            if not isinstance(outputs, dict):
+                continue
+            output_payload = outputs.get(cmd_target)
+            if not isinstance(output_payload, dict):
+                continue
+            observed_state = output_payload.get("valueState", output_payload.get("state"))
+            command.last_observed_value = observed_state
+            if self._output_state_matches_expected(command.expected_value, observed_state):
+                command.status = "confirmed"
+                command.confirmed_at = now
+
+    def _enforce_output_cooldown(self, thing_id: str, output_name: str) -> None:
+        key = (thing_id, output_name)
+        now = self._utcnow()
+        last = self._last_output_command_at.get(key)
+        if last is not None:
+            delta = (now - last).total_seconds()
+            if delta < DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS:
+                raise HomeAssistantError(
+                    f"Output command rate-limited for {output_name}; wait "
+                    f"{DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS:.1f}s between commands"
+                )
+        self._last_output_command_at[key] = now
+
+    def _enforce_mode_cooldown(self, thing_id: str) -> None:
+        now = self._utcnow()
+        last = self._last_mode_command_at.get(thing_id)
+        if last is not None:
+            delta = (now - last).total_seconds()
+            if delta < DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS:
+                raise HomeAssistantError(
+                    f"Mode command rate-limited; wait {DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS:.1f}s between changes"
+                )
+        self._last_mode_command_at[thing_id] = now
+
     def _disconnect_mqtt(self) -> None:
         client = getattr(self._api, "mqtt_client", None)
         if client:
@@ -135,6 +285,7 @@ class HydrosHub:
                 region=self._region,
             )
             self._api.authenticate()
+            self._note_api_success()
         return self._api
 
     async def async_call_in_executor(self, func: Callable[..., Any], *args: Any) -> Any:
@@ -197,10 +348,13 @@ class HydrosHub:
             for thing_id in self.collective_ids:
                 try:
                     metadata = await self._hass.async_add_executor_job(api.get_thing, thing_id)
+                    self._note_api_success()
                 except HydrosAPIError as err:
+                    self._note_api_error(err)
                     _LOGGER.warning("Failed to refresh Hydros thing %s: %s", thing_id, err)
                     continue
                 except Exception as err:
+                    self._note_api_error(err)
                     _LOGGER.warning(
                         "Failed to refresh Hydros thing %s due to invalid identifier or unexpected error: %s",
                         thing_id,
@@ -388,6 +542,14 @@ class HydrosHub:
         if not thing_id or mode is None:
             return
 
+        self._enforce_mode_cooldown(thing_id)
+        command = self._start_command(
+            command_type="mode",
+            thing_id=thing_id,
+            target_key="mode",
+            expected_value=mode,
+        )
+
         api = await self._hass.async_add_executor_job(self._ensure_client)
 
         def _change_mode() -> Any:
@@ -399,12 +561,27 @@ class HydrosHub:
                 except TypeError:
                     return api.change_mode(thing_id=thing_id, mode_id=mode)
 
-        await self._hass.async_add_executor_job(_change_mode)
+        try:
+            await self._hass.async_add_executor_job(_change_mode)
+            self._note_api_success()
+            self._mark_command_api_ack(command)
+        except Exception as err:
+            self._note_api_error(err)
+            self._mark_command_failed(command, err)
+            raise
 
     async def async_set_output_state(self, thing_id: str, output_name: str, state: int | str) -> None:
         """Set a Hydros output state via pyhydros MQTT command."""
         if not thing_id or not output_name:
             return
+
+        self._enforce_output_cooldown(thing_id, output_name)
+        command = self._start_command(
+            command_type="output",
+            thing_id=thing_id,
+            target_key=output_name,
+            expected_value=state,
+        )
 
         api = await self._hass.async_add_executor_job(self._ensure_client)
 
@@ -418,7 +595,14 @@ class HydrosHub:
                     state=state,
                 )
 
-        await self._hass.async_add_executor_job(_set_output_state)
+        try:
+            await self._hass.async_add_executor_job(_set_output_state)
+            self._note_api_success()
+            self._mark_command_api_ack(command)
+        except Exception as err:
+            self._note_api_error(err)
+            self._mark_command_failed(command, err)
+            raise
         self._optimistically_update_output_state(thing_id, output_name, state)
 
     async def async_set_pump_speed(self, thing_id: str, output_name: str, percent: float) -> None:
@@ -450,6 +634,11 @@ class HydrosHub:
 
         duration_seconds = (float(amount_ml) / flow_rate_ml_per_min) * 60.0
         duration_seconds = max(0.5, duration_seconds)
+        if duration_seconds > DEFAULT_MAX_MANUAL_DOSE_SECONDS:
+            raise HomeAssistantError(
+                f"Manual dose duration would be {round(duration_seconds, 1)}s; "
+                f"max allowed is {DEFAULT_MAX_MANUAL_DOSE_SECONDS}s"
+            )
 
         await self.async_set_output_state(thing_id, output_name, "on")
         try:
@@ -531,7 +720,9 @@ class HydrosHub:
         api = await self._hass.async_add_executor_job(self._ensure_client)
         try:
             metadata = await self._hass.async_add_executor_job(api.get_thing, thing_id)
+            self._note_api_success()
         except HydrosAPIError as err:
+            self._note_api_error(err)
             _LOGGER.warning(
                 "Forced status refresh failed for %s: %s",
                 thing_id,
@@ -661,9 +852,11 @@ class HydrosHub:
                 config = await self._hass.async_add_executor_job(
                     api.download_hydros_data_json, thing_id
                 )
+                self._note_api_success()
                 if not isinstance(config, dict):
                     config = {}  # Treat unexpected payloads as empty config
             except HydrosAPIError as err:
+                self._note_api_error(err)
                 download_error = err
                 config = None
 
@@ -672,6 +865,7 @@ class HydrosHub:
             if inline_config is None:
                 try:
                     thing_details = await self._hass.async_add_executor_job(api.get_thing, thing_id)
+                    self._note_api_success()
                 except HydrosAPIError:
                     thing_details = None
                 inline_config = self._coerce_inline_config(thing_details)
@@ -849,6 +1043,8 @@ class HydrosHub:
         record["received"] = datetime.now(timezone.utc)
         record["message_count"] = int(record.get("message_count", 0)) + 1
         self._collective_status[thing_id] = record
+        if isinstance(record.get("payload"), dict):
+            self._reconcile_commands(thing_id, record["payload"])
 
         self._ensure_watchdog(thing_id)
         async_dispatcher_send(self._hass, self.signal_for_collective(thing_id), thing_id)
@@ -955,3 +1151,56 @@ class HydrosHub:
 
     def is_collective_subscribed(self, thing_id: str) -> bool:
         return thing_id in self._subscriptions
+
+    def get_api_health(self) -> dict[str, Any]:
+        status = "unknown"
+        if self._api_last_success is not None:
+            status = "ok"
+        if self._api_last_error_at and (
+            self._api_last_success is None or self._api_last_error_at >= self._api_last_success
+        ):
+            status = "degraded"
+
+        return {
+            "status": status,
+            "last_success": self._api_last_success,
+            "last_error": self._api_last_error,
+            "last_error_at": self._api_last_error_at,
+        }
+
+    def get_command_status(
+        self,
+        thing_id: str,
+        command_type: str,
+        target_key: str,
+    ) -> dict[str, Any] | None:
+        command = self._control_commands.get((thing_id, command_type, target_key))
+        if not command:
+            return None
+
+        now = self._utcnow()
+        if command.status in {"pending", "api_acked"}:
+            age = (now - command.issued_at).total_seconds()
+            if age > DEFAULT_COMMAND_CONFIRM_TIMEOUT:
+                self._mark_command_timed_out(command)
+
+        return {
+            "id": command.command_id,
+            "status": command.status,
+            "expected": command.expected_value,
+            "observed": command.last_observed_value,
+            "issued_at": command.issued_at.isoformat(),
+            "api_ack_at": command.api_ack_at.isoformat() if command.api_ack_at else None,
+            "confirmed_at": command.confirmed_at.isoformat() if command.confirmed_at else None,
+            "error": command.error,
+            "confirm_timeout_seconds": DEFAULT_COMMAND_CONFIRM_TIMEOUT,
+        }
+
+    def get_pending_command_count(self, thing_id: str) -> int:
+        pending = 0
+        for (cmd_thing, _, _), command in self._control_commands.items():
+            if cmd_thing != thing_id:
+                continue
+            if command.status in {"pending", "api_acked"}:
+                pending += 1
+        return pending

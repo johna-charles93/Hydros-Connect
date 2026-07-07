@@ -34,6 +34,7 @@ Example of good usage for this integration includes: long term metrics, triggeri
 - Output schemas can vary by Hydros model and firmware, so some output types may require additional compatibility updates.
 - Remote control is optional and disabled by default; users must explicitly enable it in integration options.
 - Home Assistant should not be treated as the primary safety controller for critical aquarium systems.
+- Command confirmations depend on cloud and MQTT roundtrip timing; temporary `timed_out` statuses can happen during connectivity degradation.
 
 ## Capabilities
 
@@ -43,12 +44,15 @@ Example of good usage for this integration includes: long term metrics, triggeri
   - Binary output control via switch entities.
   - Variable pump speed control via number entities (0-100%).
   - Manual service calls for output state, pump speed, mode changes, and manual dosing.
+  - Entity attributes expose command lifecycle (`pending`, `api_acked`, `confirmed`, `timed_out`, `failed`).
+  - Command guardrails: output/mode cooldowns and a max computed manual-dose runtime.
   - Requires enabling **Remote control** in integration options and accepting the disclaimer.
 - **Sensors**:
   - Hydros inputs (temp, probe, triple-level, etc.) with units and transforms.
   - Output measurements (power, voltage, current, frequency, reservoir where present).
   - Doser totals (**Dosed Today**) from the Hydros logs API.
   - Collective health (MQTT online/offline) and current mode.
+  - Collective diagnostics: API status, MQTT age, and pending command count.
   - Collective alerts summary sensor (aggregates per-sensor alerts).
   - Debug sample sensor (stores latest S3 config + MQTT payload snapshot).
 - **Binary sensors**:

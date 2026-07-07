@@ -14,7 +14,11 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import slugify
 
-from .const import CONF_ENABLE_REMOTE_CONTROL, DOMAIN
+from .const import (
+    CONF_ENABLE_REMOTE_CONTROL,
+    DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS,
+    DOMAIN,
+)
 from .hydros_hub import HydrosHub
 from .sensor import OUTPUT_STATE_ALIASES, _coerce_int, _map_output_state_label
 from .types import is_binary_output
@@ -191,6 +195,16 @@ class HydrosOutputSwitch(SwitchEntity):
         label = _map_output_state_label(payload, metadata)
         if label:
             attrs["state_label"] = label
+
+        command_status = self._hub.get_command_status(
+            self._thing_id,
+            "output",
+            self._output_key,
+        )
+        if command_status:
+            attrs["last_command"] = command_status
+
+        attrs["command_cooldown_seconds"] = DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS
 
         if payload:
             attrs["payload"] = payload
