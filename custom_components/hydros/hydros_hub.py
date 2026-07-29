@@ -588,12 +588,13 @@ class HydrosHub:
 
         def _set_output_state() -> Any:
             try:
-                return api.set_output_state(thing_id, output_name, state)
+                return api.set_output_state(thing_id, output_name, state, topic_prefix="")
             except TypeError:
                 return api.set_output_state(
                     thing_id=thing_id,
                     output_name=output_name,
                     state=state,
+                    topic_prefix="",
                 )
 
         try:
