@@ -13,6 +13,7 @@ DEFAULT_COMMAND_CONFIRM_TIMEOUT = 15
 DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS = 1.0
 DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS = 2.0
 DEFAULT_MAX_MANUAL_DOSE_SECONDS = 1800
+DEFAULT_AVAILABILITY_WINDOW_SECONDS = 360  # 6 minutes; slightly longer than the 5-minute watchdog
 
 PLATFORMS: list[str] = ["sensor", "binary_sensor", "button", "select", "switch", "number"]
 

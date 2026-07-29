@@ -32,7 +32,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_registry as er
 
-from .const import DOMAIN
+from .const import DEFAULT_AVAILABILITY_WINDOW_SECONDS, DOMAIN
 from .hydros_hub import HydrosHub
 from .types import (
     is_variable_pump_output,
@@ -239,7 +239,7 @@ COLLECTIVE_STATUS_FIELDS = (
     "build",
 )
 
-COLLECTIVE_HEARTBEAT_OFFLINE_SECONDS = 30
+COLLECTIVE_HEARTBEAT_OFFLINE_SECONDS = DEFAULT_AVAILABILITY_WINDOW_SECONDS
 COLLECTIVE_HEARTBEAT_STALE_SECONDS = 300
 
 

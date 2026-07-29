@@ -19,7 +19,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from .const import DOMAIN, DEFAULT_AVAILABILITY_WINDOW_SECONDS
 from .hydros_hub import HydrosHub
 from .entity_builders import build_output_binary_description, build_rope_leak_description
 from .sensor import (
@@ -346,7 +346,7 @@ class HydrosBinarySensor(BinarySensorEntity):
         if not last_ts:
             return False
         delta = (datetime.now(timezone.utc) - last_ts).total_seconds()
-        return delta <= 30
+        return delta <= DEFAULT_AVAILABILITY_WINDOW_SECONDS
 
     @property
     def is_on(self) -> bool | None:

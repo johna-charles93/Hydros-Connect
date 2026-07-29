@@ -15,6 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     CONF_ENABLE_REMOTE_CONTROL,
+    DEFAULT_AVAILABILITY_WINDOW_SECONDS,
     DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS,
     DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS,
     DOMAIN,
@@ -276,7 +277,7 @@ class HydrosModeSelect(SelectEntity):
         if not last_ts:
             return False
         delta = (datetime.now(timezone.utc) - last_ts).total_seconds()
-        return delta <= 30
+        return delta <= DEFAULT_AVAILABILITY_WINDOW_SECONDS
 
     @property
     def current_option(self) -> str | None:
@@ -449,7 +450,7 @@ class HydrosOutputSelect(SelectEntity):
         if not last_ts:
             return False
         delta = (datetime.now(timezone.utc) - last_ts).total_seconds()
-        return delta <= 30
+        return delta <= DEFAULT_AVAILABILITY_WINDOW_SECONDS
 
     @property
     def current_option(self) -> str | None:

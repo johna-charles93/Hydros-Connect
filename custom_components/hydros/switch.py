@@ -16,6 +16,7 @@ from homeassistant.util import slugify
 
 from .const import (
     CONF_ENABLE_REMOTE_CONTROL,
+    DEFAULT_AVAILABILITY_WINDOW_SECONDS,
     DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS,
     DOMAIN,
 )
@@ -162,7 +163,7 @@ class HydrosOutputSwitch(SwitchEntity):
         if not last_ts:
             return False
         delta = (datetime.now(timezone.utc) - last_ts).total_seconds()
-        return delta <= 30
+        return delta <= DEFAULT_AVAILABILITY_WINDOW_SECONDS
 
     @property
     def is_on(self) -> bool | None:
