@@ -245,6 +245,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     _ensure_services_registered(hass)
 
+    # Migration: remove legacy output-switch entities for outputs that now have
+    # output-select entities. Build the set of output keys that have a select entry,
+    # then prune any switch entries for the same key.
+    registry = er.async_get(hass)
+    select_output_keys: set[str] = set()
+    for reg_entry in registry.entities.values():
+        if reg_entry.config_entry_id != entry.entry_id:
+            continue
+        if reg_entry.platform != DOMAIN:
+            continue
+        uid = reg_entry.unique_id or ""
+        if "-output-select-" in uid:
+            select_output_keys.add(uid.split("-output-select-", 1)[-1])
+
+    for reg_entry in list(registry.entities.values()):
+        if reg_entry.config_entry_id != entry.entry_id:
+            continue
+        if reg_entry.platform != DOMAIN:
+            continue
+        uid = reg_entry.unique_id or ""
+        if "-output-switch-" in uid:
+            output_key = uid.split("-output-switch-", 1)[-1]
+            if output_key in select_output_keys:
+                registry.async_remove(reg_entry.entity_id)
+
     if PLATFORMS:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
