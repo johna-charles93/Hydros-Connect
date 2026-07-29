@@ -93,6 +93,18 @@ async def async_setup_entry(
             if capabilities.get("supports_percent_control"):
                 continue
 
+            # Skip outputs that support auto mode (they'll be handled by outlet selects)
+            payload = hub.get_output_payload(thing_id, output_key) or {}
+            payload_state = payload.get("valueState")
+            supports_auto = False
+            if payload_state == -1 or payload_state == "-1":
+                supports_auto = True
+            elif isinstance(payload_state, str) and payload_state.strip().lower() == "auto":
+                supports_auto = True
+            
+            if supports_auto:
+                continue
+
             name = build_output_display_name(output_meta, output_key)
             slug = slugify(f"{thing_id}-output-switch-{output_key}")
 
@@ -216,10 +228,10 @@ class HydrosOutputSwitch(SwitchEntity):
         return attrs
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self._hub.async_set_output_state(self._thing_id, self._output_key, "on")
+        await self._hub.async_set_output_state(self._thing_id, self._output_key, 1)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self._hub.async_set_output_state(self._thing_id, self._output_key, "off")
+        await self._hub.async_set_output_state(self._thing_id, self._output_key, 0)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

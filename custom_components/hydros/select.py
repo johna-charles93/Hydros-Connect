@@ -16,8 +16,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import (
     CONF_ENABLE_REMOTE_CONTROL,
     DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS,
+    DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS,
     DOMAIN,
 )
+from .entity_builders import build_output_display_name
 from .hydros_hub import HydrosHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,6 +28,12 @@ _LOGGER = logging.getLogger(__name__)
 @dataclass
 class HydrosModeSelectEntityDescription(SelectEntityDescription):
     thing_id: str | None = None
+
+
+@dataclass
+class HydrosOutputSelectDescription(SelectEntityDescription):
+    thing_id: str | None = None
+    output_key: str | None = None
 
 
 def _extract_modes_from_config(
@@ -168,6 +176,76 @@ async def async_setup_entry(
 
     if entities:
         async_add_entities(entities)
+
+    # Add outlet select entities for outputs that support on/off/auto
+    outlet_entities: list[HydrosOutputSelect] = []
+    for thing_id in hub.collective_ids:
+        try:
+            config = await hub.async_get_collective_config(thing_id)
+        except Exception as err:
+            _LOGGER.warning("Hydros failed to load outlet select config for %s: %s", thing_id, err)
+            continue
+
+        metadata = hub.get_collective_metadata(thing_id) or {}
+        device_name = metadata.get("friendlyName") or metadata.get("thingName") or thing_id
+        manufacturer = metadata.get("manufacturer") or "Hydros"
+        model = metadata.get("thingType") or metadata.get("type")
+
+        outputs = config.get("Output")
+        if not isinstance(outputs, dict):
+            continue
+
+        for output_key, output_meta in outputs.items():
+            if not isinstance(output_meta, dict):
+                continue
+
+            # Check if this output supports binary control and can have auto mode
+            capabilities = hub.get_output_capabilities(thing_id, output_key)
+            if not capabilities.get("supports_binary_control"):
+                continue
+            if capabilities.get("supports_percent_control"):
+                continue
+
+            # Check if the output payload or metadata indicates auto mode support
+            payload = hub.get_output_payload(thing_id, output_key) or {}
+            payload_state = payload.get("valueState")
+            
+            supports_auto = False
+            # Check if current state is -1 (auto)
+            if payload_state == -1 or payload_state == "-1":
+                supports_auto = True
+            # Check if state is a string like "auto"
+            elif isinstance(payload_state, str) and payload_state.strip().lower() == "auto":
+                supports_auto = True
+            
+            if not supports_auto:
+                continue
+
+            name = build_output_display_name(output_meta, output_key)
+            slug = f"{thing_id}-output-select-{output_key}"
+
+            description = HydrosOutputSelectDescription(
+                key=f"{entry.entry_id}-{slug}",
+                name=name,
+                thing_id=thing_id,
+                output_key=output_key,
+            )
+
+            outlet_entities.append(
+                HydrosOutputSelect(
+                    hub=hub,
+                    description=description,
+                    device_info=DeviceInfo(
+                        identifiers={(DOMAIN, thing_id)},
+                        name=device_name,
+                        manufacturer=manufacturer,
+                        model=model,
+                    ),
+                )
+            )
+
+    if outlet_entities:
+        async_add_entities(outlet_entities)
 
 
 class HydrosModeSelect(SelectEntity):
@@ -325,3 +403,130 @@ class HydrosModeSelect(SelectEntity):
 
         if changed:
             self.async_write_ha_state()
+
+
+class HydrosOutputSelect(SelectEntity):
+    """Select entity for Hydros outputs that support on/off/auto modes."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_options = ["off", "on", "auto"]
+
+    # Map option display names to numeric values
+    _OPTION_TO_VALUE = {
+        "off": 0,
+        "on": 1,
+        "auto": -1,
+    }
+
+    # Map numeric values to option display names
+    _VALUE_TO_OPTION = {
+        0: "off",
+        1: "on",
+        -1: "auto",
+    }
+
+    def __init__(
+        self,
+        *,
+        hub: HydrosHub,
+        description: HydrosOutputSelectDescription,
+        device_info: DeviceInfo,
+    ) -> None:
+        self._hub = hub
+        self.entity_description = description
+        self._device_info = device_info
+        self._thing_id = description.thing_id or ""
+        self._output_key = description.output_key or ""
+        self._attr_unique_id = description.key
+        self._attr_name = description.name
+        self._remove_dispatcher: Callable[[], None] | None = None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return self._device_info
+
+    @property
+    def available(self) -> bool:
+        if not self._thing_id:
+            return False
+        last_ts = self._hub.get_latest_status_ts(self._thing_id)
+        if not last_ts:
+            return False
+        delta = (datetime.now(timezone.utc) - last_ts).total_seconds()
+        return delta <= 30
+
+    @property
+    def current_option(self) -> str | None:
+        if not self._thing_id or not self._output_key:
+            return None
+
+        payload = self._hub.get_output_payload(self._thing_id, self._output_key) or {}
+        value_state = payload.get("valueState")
+
+        # Try numeric value first
+        try:
+            numeric_value = int(value_state)
+            if numeric_value in self._VALUE_TO_OPTION:
+                return self._VALUE_TO_OPTION[numeric_value]
+        except (TypeError, ValueError):
+            pass
+
+        # Try string value
+        if isinstance(value_state, str):
+            normalized = value_state.strip().lower()
+            if normalized in self._OPTION_TO_VALUE:
+                return normalized
+
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        payload = self._hub.get_output_payload(self._thing_id, self._output_key) or {}
+
+        attrs: dict[str, Any] = {
+            "thing_id": self._thing_id,
+            "output_key": self._output_key,
+        }
+
+        command_status = self._hub.get_command_status(
+            self._thing_id,
+            "output",
+            self._output_key,
+        )
+        if command_status:
+            attrs["last_command"] = command_status
+
+        attrs["command_cooldown_seconds"] = DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS
+
+        if payload:
+            attrs["payload"] = payload
+
+        return attrs
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in self._OPTION_TO_VALUE:
+            raise ValueError(f"Invalid option: {option}")
+
+        value = self._OPTION_TO_VALUE[option]
+        await self._hub.async_set_output_state(self._thing_id, self._output_key, value)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_dispatcher = async_dispatcher_connect(
+            self.hass,
+            self._hub.signal_for_collective(self._thing_id),
+            self._handle_signal,
+        )
+        if self._thing_id:
+            await self._hub.async_subscribe_collective_status(self._thing_id)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_dispatcher:
+            self._remove_dispatcher()
+            self._remove_dispatcher = None
+        await super().async_will_remove_from_hass()
+
+    def _handle_signal(self, _: str) -> None:
+        self.schedule_update_ha_state()
+

@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.4.0 - 2026-07-28
+
+### Added
+- Add on/off/auto select entities for binary outputs that support auto mode, providing full three-state control alongside mode-based control.
+
+### Fixed
+- Fix switch turn_off command failing due to sending string "off" instead of numeric value 0 to pyhydros library.
+- Skip creating binary switch entities for outputs that have auto mode support (now only select entities are created for those).
+
 ## 0.3.9 - 2026-07-07
 
 ### Fixed
