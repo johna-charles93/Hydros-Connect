@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file.
 ### Fixed
 - Fix switch turn_off command failing due to sending string "off" instead of numeric value 0 to pyhydros library.
 - Skip creating binary switch entities for outputs that have auto mode support (now only select entities are created for those).
+- Fix auto mode detection in select entities: now properly detects AUTO capability via config metadata (onTemp, offTemp, fallback, outputDevice) and determines current state via override flag (false = auto, true = manual on/off).
 
 ## 0.3.9 - 2026-07-07
 

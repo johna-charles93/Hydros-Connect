@@ -206,17 +206,12 @@ async def async_setup_entry(
             if capabilities.get("supports_percent_control"):
                 continue
 
-            # Check if the output payload or metadata indicates auto mode support
-            payload = hub.get_output_payload(thing_id, output_key) or {}
-            payload_state = payload.get("valueState")
-            
-            supports_auto = False
-            # Check if current state is -1 (auto)
-            if payload_state == -1 or payload_state == "-1":
-                supports_auto = True
-            # Check if state is a string like "auto"
-            elif isinstance(payload_state, str) and payload_state.strip().lower() == "auto":
-                supports_auto = True
+            # Check if the output metadata indicates auto mode support
+            # AUTO outputs have temperature/threshold metadata like onTemp, offTemp, fallback, outputDevice
+            supports_auto = any(
+                key in output_meta 
+                for key in ("onTemp", "offTemp", "fallback", "outputDevice", "autoControl")
+            )
             
             if not supports_auto:
                 continue
@@ -462,6 +457,15 @@ class HydrosOutputSelect(SelectEntity):
             return None
 
         payload = self._hub.get_output_payload(self._thing_id, self._output_key) or {}
+        
+        # Check override flag to determine if in AUTO mode
+        # override: false = AUTO mode (Hydros controller in auto)
+        # override: true = Manual ON/OFF mode
+        override = payload.get("override")
+        if override is False:
+            return "auto"
+        
+        # If override is true or not present, check valueState for on/off
         value_state = payload.get("valueState")
 
         # Try numeric value first

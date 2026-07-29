@@ -94,13 +94,11 @@ async def async_setup_entry(
                 continue
 
             # Skip outputs that support auto mode (they'll be handled by outlet selects)
-            payload = hub.get_output_payload(thing_id, output_key) or {}
-            payload_state = payload.get("valueState")
-            supports_auto = False
-            if payload_state == -1 or payload_state == "-1":
-                supports_auto = True
-            elif isinstance(payload_state, str) and payload_state.strip().lower() == "auto":
-                supports_auto = True
+            # AUTO outputs have temperature/threshold metadata like onTemp, offTemp, fallback, outputDevice
+            supports_auto = any(
+                key in output_meta 
+                for key in ("onTemp", "offTemp", "fallback", "outputDevice", "autoControl")
+            )
             
             if supports_auto:
                 continue
