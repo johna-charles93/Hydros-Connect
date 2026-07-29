@@ -458,32 +458,16 @@ class HydrosOutputSelect(SelectEntity):
             return None
 
         payload = self._hub.get_output_payload(self._thing_id, self._output_key) or {}
-        
-        # Check override flag to determine if in AUTO mode
-        # override: false = AUTO mode (Hydros controller in auto)
-        # override: true = Manual ON/OFF mode
-        override = payload.get("override")
-        if override is False:
+
+        if payload.get("override") is False:
             return "auto"
-        
-        # If override is true or not present, check valueState for on/off
-        value_state = payload.get("valueState")
 
-        # Try numeric value first
         try:
-            numeric_value = int(value_state)
-            if numeric_value in self._VALUE_TO_OPTION:
-                return self._VALUE_TO_OPTION[numeric_value]
+            value_state = int(payload.get("valueState", 0))
         except (TypeError, ValueError):
-            pass
+            return None
 
-        # Try string value
-        if isinstance(value_state, str):
-            normalized = value_state.strip().lower()
-            if normalized in self._OPTION_TO_VALUE:
-                return normalized
-
-        return None
+        return "on" if value_state > 0 else "off"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
