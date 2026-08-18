@@ -32,6 +32,7 @@ Example of good usage for this integration includes: long term metrics, triggeri
 - [Sample Scripts File](examples/alexa_mode_scripts.yaml)
 - [Automation Blueprint](blueprints/automation/hydros/hydros_mode_routine.yaml)
 - [Rebrand and Repo Ownership](REPO_OWNERSHIP_MIGRATION.md)
+- [HACS Migration Notice](HACS_MIGRATION_NOTICE.md)
 
 ## Quick Start (Alexa Mode Control in ~5 Minutes)
 
