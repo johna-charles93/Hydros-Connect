@@ -288,10 +288,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     sensor_manager = None
     binary_manager = None
+    scene_return_manager = None
     hub: HydrosHub | None = None
     if entry_data:
         sensor_manager = entry_data.get("sensor_manager")
         binary_manager = entry_data.get("binary_sensor_manager")
+        scene_return_manager = entry_data.get("scene_return_manager")
         hub = entry_data.get("hub")
 
     if sensor_manager:
@@ -299,6 +301,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if binary_manager:
         await binary_manager.async_unload()
+
+    if scene_return_manager:
+        await scene_return_manager.async_shutdown()
 
     if hub:
         await hub.async_unload()

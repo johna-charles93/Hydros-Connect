@@ -29,6 +29,7 @@
         "data": {
           "enable_remote_control": "Enable remote control",
           "enable_alexa_scenes": "Enable Alexa routine scenes",
+          "alexa_easy_setup": "Use easy setup defaults (recommended)",
           "alexa_target_collective": "Target collective for Alexa scenes",
           "alexa_feed_scene_name": "Feed scene name",
           "alexa_feed_scene_mode": "Feed start mode",

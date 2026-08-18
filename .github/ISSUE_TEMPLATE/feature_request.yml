@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an idea to improve Hydros Connect.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      placeholder: Describe the pain point.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      placeholder: Describe the behavior you want.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      placeholder: Describe any alternatives or workarounds.
+
+  - type: dropdown
+    id: user_type
+    attributes:
+      label: Who benefits most?
+      options:
+        - Non-developer / beginner users
+        - Intermediate users
+        - Advanced users
+        - Developers / maintainers

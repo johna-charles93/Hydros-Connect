@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Start here (migration and setup)
+    url: https://github.com/johna-charles93/Hydros-Connect/issues/2
+    about: Read this first for repository migration and setup guidance.
+  - name: HACS migration notice
+    url: https://github.com/johna-charles93/Hydros-Connect/blob/main/HACS_MIGRATION_NOTICE.md
+    about: Follow these steps if migrating from the old repository.

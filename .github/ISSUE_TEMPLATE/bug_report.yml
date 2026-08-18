@@ -1,0 +1,101 @@
+name: Bug report
+description: Report a problem with Hydros Connect.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please fill out all sections so we can reproduce quickly.
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: 2026.8.x
+    validations:
+      required: true
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: Hydros Connect version
+      placeholder: v0.5.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: remote_control
+    attributes:
+      label: Remote control enabled?
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: alexa_scenes
+    attributes:
+      label: Alexa routine scenes enabled?
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: alexa_path
+    attributes:
+      label: Alexa integration path
+      options:
+        - Nabu Casa
+        - Self-hosted Alexa Smart Home setup
+        - Not using Alexa
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What happened?
+      description: Describe expected behavior and actual behavior.
+      placeholder: Tell us what you expected to happen and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup_validation
+    attributes:
+      label: Setup Validation report
+      description: Press the "Validate Setup" button entity and paste the persistent notification output.
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Include relevant Home Assistant logs. Remove secrets before posting.
+      render: text
+
+  - type: textarea
+    id: debug_sample
+    attributes:
+      label: Optional debug sample
+      description: If requested, use the Debug Sample button entity and paste redacted details only.
+      render: text

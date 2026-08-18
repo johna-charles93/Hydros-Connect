@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
+from typing import Any
 
 from homeassistant.components.scene import Scene
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
 from .const import (
@@ -51,6 +55,8 @@ from .const import (
 from .hydros_hub import HydrosHub
 
 _LOGGER = logging.getLogger(__name__)
+_STORE_VERSION = 1
+_STORE_KEY_PREFIX = f"{DOMAIN}_scene_returns"
 
 
 @dataclass
@@ -61,6 +67,123 @@ class _PresetConfig:
     return_enabled: bool
     return_delay_minutes: int
     return_mode: str
+
+
+@dataclass
+class _ScheduledReturn:
+    key: str
+    thing_id: str
+    mode: str
+    run_at: str
+
+
+class HydrosSceneReturnManager:
+    def __init__(self, hass: HomeAssistant, *, entry_id: str, hub: HydrosHub) -> None:
+        self._hass = hass
+        self._hub = hub
+        self._entry_id = entry_id
+        self._store = Store[list[dict[str, Any]]](
+            hass,
+            _STORE_VERSION,
+            f"{_STORE_KEY_PREFIX}_{entry_id}",
+        )
+        self._unsubs: dict[str, Any] = {}
+        self._scheduled: dict[str, _ScheduledReturn] = {}
+
+    async def async_initialize(self) -> None:
+        raw = await self._store.async_load() or []
+        now = dt_util.utcnow()
+        changed = False
+
+        for item in raw:
+            key = str(item.get("key", "")).strip()
+            thing_id = str(item.get("thing_id", "")).strip()
+            mode = str(item.get("mode", "")).strip()
+            run_at_raw = str(item.get("run_at", "")).strip()
+            if not key or not thing_id or not mode or not run_at_raw:
+                changed = True
+                continue
+
+            run_at = dt_util.parse_datetime(run_at_raw)
+            if run_at is None:
+                changed = True
+                continue
+            if run_at.tzinfo is None:
+                run_at = dt_util.as_utc(run_at)
+            if run_at <= now:
+                changed = True
+                continue
+
+            self._scheduled[key] = _ScheduledReturn(
+                key=key,
+                thing_id=thing_id,
+                mode=mode,
+                run_at=run_at.isoformat(),
+            )
+            self._schedule_callback(key, thing_id, mode, run_at)
+
+        if changed:
+            await self._async_persist()
+
+    async def async_shutdown(self) -> None:
+        for unsub in self._unsubs.values():
+            unsub()
+        self._unsubs.clear()
+
+    async def async_schedule_return(
+        self,
+        *,
+        key: str,
+        thing_id: str,
+        mode: str,
+        delay_minutes: int,
+    ) -> None:
+        if key in self._unsubs:
+            self._unsubs[key]()
+            self._unsubs.pop(key, None)
+
+        run_at = dt_util.utcnow() + timedelta(minutes=max(1, int(delay_minutes)))
+        self._scheduled[key] = _ScheduledReturn(
+            key=key,
+            thing_id=thing_id,
+            mode=mode,
+            run_at=run_at.isoformat(),
+        )
+        self._schedule_callback(key, thing_id, mode, run_at)
+        await self._async_persist()
+
+    def _schedule_callback(self, key: str, thing_id: str, mode: str, run_at: Any) -> None:
+        @callback
+        def _handle_due(_: Any) -> None:
+            self._hass.async_create_task(self._async_execute_return(key, thing_id, mode))
+
+        self._unsubs[key] = async_track_point_in_utc_time(self._hass, _handle_due, run_at)
+
+    async def _async_execute_return(self, key: str, thing_id: str, mode: str) -> None:
+        self._unsubs.pop(key, None)
+        self._scheduled.pop(key, None)
+        await self._async_persist()
+
+        try:
+            await self._hub.async_change_mode(thing_id, mode)
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Hydros routine scene failed to return mode (key=%s)",
+                key,
+                exc_info=True,
+            )
+
+    async def _async_persist(self) -> None:
+        payload = [
+            {
+                "key": record.key,
+                "thing_id": record.thing_id,
+                "mode": record.mode,
+                "run_at": record.run_at,
+            }
+            for record in self._scheduled.values()
+        ]
+        await self._store.async_save(payload)
 
 
 def _is_remote_control_enabled(entry: ConfigEntry) -> bool:
@@ -183,6 +306,12 @@ async def async_setup_entry(
         hass.data[DOMAIN][entry.entry_id] = entry_data
 
     hub: HydrosHub = entry_data["hub"]
+    manager = entry_data.get("scene_return_manager")
+    if not isinstance(manager, HydrosSceneReturnManager):
+        manager = HydrosSceneReturnManager(hass, entry_id=entry.entry_id, hub=hub)
+        entry_data["scene_return_manager"] = manager
+        await manager.async_initialize()
+
     thing_id = _resolve_target_collective(entry, hub)
     if not thing_id:
         return
@@ -200,6 +329,7 @@ async def async_setup_entry(
                 hub=hub,
                 thing_id=thing_id,
                 preset=preset,
+                return_manager=manager,
                 device_info=DeviceInfo(
                     identifiers={(DOMAIN, thing_id)},
                     name=device_name,
@@ -222,11 +352,13 @@ class HydrosModeRoutineScene(Scene):
         hub: HydrosHub,
         thing_id: str,
         preset: _PresetConfig,
+        return_manager: HydrosSceneReturnManager,
         device_info: DeviceInfo,
     ) -> None:
         self._hub = hub
         self._thing_id = thing_id
         self._preset = preset
+        self._return_manager = return_manager
         self._device_info = device_info
 
         slug = slugify(f"{thing_id}-{preset.key}-{preset.display_name}")
@@ -256,18 +388,9 @@ class HydrosModeRoutineScene(Scene):
         if not self._preset.return_enabled:
             return
 
-        delay_seconds = int(self._preset.return_delay_minutes) * 60
-        return_mode = self._preset.return_mode
-
-        async def _delayed_return() -> None:
-            await asyncio.sleep(delay_seconds)
-            try:
-                await self._hub.async_change_mode(self._thing_id, return_mode)
-            except Exception:  # noqa: BLE001
-                _LOGGER.warning(
-                    "Hydros routine scene failed to return mode for %s",
-                    self.entity_id,
-                    exc_info=True,
-                )
-
-        self.hass.async_create_task(_delayed_return())
+        await self._return_manager.async_schedule_return(
+            key=self._attr_unique_id,
+            thing_id=self._thing_id,
+            mode=self._preset.return_mode,
+            delay_minutes=self._preset.return_delay_minutes,
+        )

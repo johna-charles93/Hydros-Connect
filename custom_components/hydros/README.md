@@ -39,8 +39,9 @@ Example of good usage for this integration includes: long term metrics, triggeri
 1. Enable **Remote control** in Hydros integration options and accept the disclaimer.
 2. Copy scripts from `../../examples/alexa_mode_scripts.yaml` into Home Assistant scripts.
 3. Replace `select.my_collective_mode` and mode names with your own Hydros values.
-4. Expose those scripts to Alexa (Home Assistant Cloud or your Alexa bridge setup).
-5. Create Alexa routines (for example: "set reef to feed mode" -> `Hydros Mode Feed`).
+4. Enable Home Assistant -> Alexa voice integration (Nabu Casa or a self-hosted Alexa Smart Home setup).
+5. Expose those scripts/scenes to Alexa and run discovery.
+6. Create Alexa routines (for example: "set reef to feed mode" -> `Hydros Mode Feed`).
 
 If you are adding this to an existing setup, keep critical life-support controls in native Hydros logic.
 
@@ -53,11 +54,18 @@ You can now manage user-facing Alexa routine controls directly in:
 From this options screen, users can:
 
 - Enable/disable Alexa routine scenes.
+- Use an easy setup profile (recommended defaults for non-developers).
 - Select the target collective.
-- Set scene names and mode mappings for Feed, Maintenance, and one Custom scene.
+- Set scene names and mode mappings for Feed, Maintenance, and one Custom scene (with mode dropdowns when available).
 - Configure optional auto-return mode and return delay.
 
 These scene entities are generated automatically and can be exposed to Alexa without editing YAML.
+
+### Built-in setup validation
+
+- Use the `Validate Setup` button entity from the Hydros device page in Home Assistant.
+- It creates a persistent notification report showing checks, warnings, and errors for common setup issues.
+- Include this report in bug tickets for faster support.
 
 ## Attribution
 
@@ -109,7 +117,9 @@ This integration can support Alexa-driven mode changes through Home Assistant. T
 
 - Remote control is enabled in integration options.
 - A Hydros mode select entity exists (for example: `select.my_collective_mode`).
-- Home Assistant is linked to Alexa (via Home Assistant Cloud or an equivalent Alexa bridge setup).
+- Home Assistant is linked to Alexa for voice control:
+  - Home Assistant Cloud (Nabu Casa), or
+  - Self-hosted Alexa Smart Home setup (developer app/skill).
 
 ### Step 1: Create one script per mode
 
@@ -154,6 +164,13 @@ Replace `select.my_collective_mode` and mode names with values from your own Hyd
   - "set reef to normal mode" -> run `Hydros Mode Normal`
   - "set reef to maintenance mode" -> run `Hydros Mode Maintenance`
 
+### Nabu Casa exposure note
+
+- With Home Assistant Cloud (Nabu Casa), Alexa exposure is entity-by-entity by design.
+- Recommended approach: expose only Hydros routine scenes (Feed, Maintenance, Custom) instead of all Hydros entities.
+- This keeps setup simple for non-developers and reduces accidental voice control of the wrong entity.
+- If users need additional voice actions later, they can selectively expose more entities.
+
 ### Safety recommendations
 
 - Keep critical life-support behavior in native Hydros logic.
@@ -164,6 +181,8 @@ Replace `select.my_collective_mode` and mode names with values from your own Hyd
 ### Troubleshooting
 
 - Alexa cannot find Hydros scripts:
+  - Confirm Alexa integration is enabled in Home Assistant (Nabu Casa or self-hosted Alexa Smart Home setup).
+  - In Nabu Casa, confirm the specific scripts/scenes are marked to be exposed to Alexa.
   - Confirm scripts are exposed to Alexa.
   - Run Alexa device discovery again.
   - If needed, remove stale duplicates in Alexa and rediscover.
@@ -213,6 +232,8 @@ What this blueprint does:
 - Lets users pick any trigger in the UI (time, button press, sensor state, webhook, etc.).
 - Changes HYDROS to a selected start mode.
 - Optionally returns to another mode after a delay.
+
+Alexa scene auto-return scheduling is restart-safe and restored after Home Assistant restarts.
 
 ### Import and Use Blueprint
 

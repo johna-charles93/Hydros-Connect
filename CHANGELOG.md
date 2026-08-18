@@ -13,7 +13,13 @@ All notable changes to this project are documented in this file.
 - Add HYDROS visual routine automation blueprint for no-YAML mode workflows.
 - Add integration Options UI controls for Alexa routine scenes (Feed, Maintenance, Custom) with optional auto-return behavior.
 - Add Home Assistant scene entities generated from integration options for easier Alexa exposure.
+- Add easy-setup defaults and dynamic mode dropdowns in integration options when mode data is available.
+- Add a `Validate Setup` button entity that generates a persistent notification health report for common setup issues.
+- Make Alexa scene auto-return scheduling restart-safe by persisting pending returns and restoring timers after Home Assistant restart.
 - Add repository rebrand/ownership migration checklist documentation.
+- Clarify Alexa voice-control prerequisites in documentation (Nabu Casa or self-hosted Alexa Smart Home setup).
+- Add explicit Nabu Casa entity-exposure guidance and recommend exposing Hydros routine scenes for simpler Alexa setup.
+- Add GitHub issue templates for bug reports and feature requests, including setup-validation diagnostics prompts.
 
 ## 0.4.0 - 2026-07-28
 

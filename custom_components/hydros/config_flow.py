@@ -10,6 +10,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    CONF_ALEXA_EASY_SETUP,
     CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
     CONF_ALEXA_CUSTOM_RETURN_ENABLED,
     CONF_ALEXA_CUSTOM_RETURN_MODE,
@@ -38,6 +39,7 @@ from .const import (
     DEFAULT_ALEXA_CUSTOM_RETURN_MODE,
     DEFAULT_ALEXA_CUSTOM_SCENE_MODE,
     DEFAULT_ALEXA_CUSTOM_SCENE_NAME,
+    DEFAULT_ALEXA_EASY_SETUP,
     DEFAULT_ALEXA_FEED_RETURN_DELAY_MINUTES,
     DEFAULT_ALEXA_FEED_RETURN_ENABLED,
     DEFAULT_ALEXA_FEED_RETURN_MODE,
@@ -52,6 +54,7 @@ from .const import (
     DEFAULT_REGION,
     DOMAIN,
 )
+from .mode_utils import extract_mode_options
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -119,6 +122,47 @@ def _fetch_collectives_sync(username: str, password: str, region: str) -> dict[s
         raise HydrosAPIError("No Hydros collectives or standalone devices found for this account")
 
     return selectable
+
+
+def _fetch_mode_options_sync(
+    username: str,
+    password: str,
+    region: str,
+    thing_id: str,
+) -> list[str]:
+    if _IMPORT_ERROR is not None:
+        raise _IMPORT_ERROR
+
+    api = HydrosAPI(username=username, password=password, region=region)
+    api.authenticate()
+
+    config: dict[str, Any] | None = None
+    try:
+        raw_config = api.download_hydros_data_json(thing_id)
+        if isinstance(raw_config, dict):
+            config = raw_config
+    except Exception:  # noqa: BLE001
+        config = None
+
+    if config is None:
+        try:
+            thing = api.get_thing(thing_id)
+        except Exception:  # noqa: BLE001
+            thing = None
+        if isinstance(thing, dict):
+            embedded = thing.get("config")
+            if isinstance(embedded, dict):
+                config = embedded
+            else:
+                config = thing
+
+    mode_options = extract_mode_options(config)
+    deduped: list[str] = []
+    for option in mode_options:
+        candidate = option.strip()
+        if candidate and candidate not in deduped:
+            deduped.append(candidate)
+    return deduped
 
 
 class HydrosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -276,6 +320,39 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 DEFAULT_ENABLE_ALEXA_SCENES,
             )
         )
+        current_easy_setup = bool(
+            self._config_entry.options.get(
+                CONF_ALEXA_EASY_SETUP,
+                DEFAULT_ALEXA_EASY_SETUP,
+            )
+        )
+
+        mode_options: list[str] = []
+        if default_collective:
+            try:
+                mode_options = await self.hass.async_add_executor_job(
+                    _fetch_mode_options_sync,
+                    str(self._config_entry.data.get(CONF_USERNAME, "")),
+                    str(self._config_entry.data.get(CONF_PASSWORD, "")),
+                    str(self._config_entry.data.get(CONF_REGION, DEFAULT_REGION)),
+                    default_collective,
+                )
+            except Exception:  # noqa: BLE001
+                mode_options = []
+
+        mode_selector: Any = str
+        if mode_options:
+            mode_selector = vol.In({mode: mode for mode in mode_options})
+
+        def _mode_default(option_key: str, fallback: str) -> str:
+            current = str(self._config_entry.options.get(option_key, fallback)).strip() or fallback
+            if not mode_options:
+                return current
+            if current in mode_options:
+                return current
+            if fallback in mode_options:
+                return fallback
+            return mode_options[0]
 
         schema_dict: dict[Any, Any] = {
             vol.Required(
@@ -285,6 +362,10 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
             vol.Required(
                 CONF_ENABLE_ALEXA_SCENES,
                 default=current_alexa_enabled,
+            ): bool,
+            vol.Required(
+                CONF_ALEXA_EASY_SETUP,
+                default=current_easy_setup,
             ): bool,
         }
 
@@ -309,13 +390,11 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 ): str,
                 vol.Required(
                     CONF_ALEXA_FEED_SCENE_MODE,
-                    default=str(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_FEED_SCENE_MODE,
-                            DEFAULT_ALEXA_FEED_SCENE_MODE,
-                        )
+                    default=_mode_default(
+                        CONF_ALEXA_FEED_SCENE_MODE,
+                        DEFAULT_ALEXA_FEED_SCENE_MODE,
                     ),
-                ): str,
+                ): mode_selector,
                 vol.Required(
                     CONF_ALEXA_FEED_RETURN_ENABLED,
                     default=bool(
@@ -336,13 +415,11 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
                 vol.Required(
                     CONF_ALEXA_FEED_RETURN_MODE,
-                    default=str(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_FEED_RETURN_MODE,
-                            DEFAULT_ALEXA_FEED_RETURN_MODE,
-                        )
+                    default=_mode_default(
+                        CONF_ALEXA_FEED_RETURN_MODE,
+                        DEFAULT_ALEXA_FEED_RETURN_MODE,
                     ),
-                ): str,
+                ): mode_selector,
                 vol.Required(
                     CONF_ALEXA_MAINT_SCENE_NAME,
                     default=str(
@@ -354,13 +431,11 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 ): str,
                 vol.Required(
                     CONF_ALEXA_MAINT_SCENE_MODE,
-                    default=str(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_MAINT_SCENE_MODE,
-                            DEFAULT_ALEXA_MAINT_SCENE_MODE,
-                        )
+                    default=_mode_default(
+                        CONF_ALEXA_MAINT_SCENE_MODE,
+                        DEFAULT_ALEXA_MAINT_SCENE_MODE,
                     ),
-                ): str,
+                ): mode_selector,
                 vol.Required(
                     CONF_ALEXA_MAINT_RETURN_ENABLED,
                     default=bool(
@@ -381,13 +456,11 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
                 vol.Required(
                     CONF_ALEXA_MAINT_RETURN_MODE,
-                    default=str(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_MAINT_RETURN_MODE,
-                            DEFAULT_ALEXA_MAINT_RETURN_MODE,
-                        )
+                    default=_mode_default(
+                        CONF_ALEXA_MAINT_RETURN_MODE,
+                        DEFAULT_ALEXA_MAINT_RETURN_MODE,
                     ),
-                ): str,
+                ): mode_selector,
                 vol.Required(
                     CONF_ALEXA_CUSTOM_SCENE_NAME,
                     default=str(
@@ -399,13 +472,11 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 ): str,
                 vol.Required(
                     CONF_ALEXA_CUSTOM_SCENE_MODE,
-                    default=str(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_CUSTOM_SCENE_MODE,
-                            DEFAULT_ALEXA_CUSTOM_SCENE_MODE,
-                        )
+                    default=_mode_default(
+                        CONF_ALEXA_CUSTOM_SCENE_MODE,
+                        DEFAULT_ALEXA_CUSTOM_SCENE_MODE,
                     ),
-                ): str,
+                ): mode_selector,
                 vol.Required(
                     CONF_ALEXA_CUSTOM_RETURN_ENABLED,
                     default=bool(
@@ -426,13 +497,11 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
                 vol.Required(
                     CONF_ALEXA_CUSTOM_RETURN_MODE,
-                    default=str(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_CUSTOM_RETURN_MODE,
-                            DEFAULT_ALEXA_CUSTOM_RETURN_MODE,
-                        )
+                    default=_mode_default(
+                        CONF_ALEXA_CUSTOM_RETURN_MODE,
+                        DEFAULT_ALEXA_CUSTOM_RETURN_MODE,
                     ),
-                ): str,
+                ): mode_selector,
             }
         )
 
@@ -448,6 +517,7 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
         options_data: dict[str, Any] = {
             CONF_ENABLE_REMOTE_CONTROL: bool(user_input.get(CONF_ENABLE_REMOTE_CONTROL, False)),
             CONF_ENABLE_ALEXA_SCENES: bool(user_input.get(CONF_ENABLE_ALEXA_SCENES, True)),
+            CONF_ALEXA_EASY_SETUP: bool(user_input.get(CONF_ALEXA_EASY_SETUP, True)),
             CONF_ALEXA_FEED_SCENE_NAME: str(user_input.get(CONF_ALEXA_FEED_SCENE_NAME, "")).strip(),
             CONF_ALEXA_FEED_SCENE_MODE: str(user_input.get(CONF_ALEXA_FEED_SCENE_MODE, "")).strip(),
             CONF_ALEXA_FEED_RETURN_ENABLED: bool(user_input.get(CONF_ALEXA_FEED_RETURN_ENABLED, False)),
@@ -469,6 +539,29 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
             options_data[CONF_ALEXA_TARGET_COLLECTIVE] = str(
                 user_input.get(CONF_ALEXA_TARGET_COLLECTIVE, default_collective)
             ).strip()
+
+        if options_data[CONF_ALEXA_EASY_SETUP]:
+            options_data[CONF_ALEXA_FEED_SCENE_NAME] = DEFAULT_ALEXA_FEED_SCENE_NAME
+            options_data[CONF_ALEXA_FEED_SCENE_MODE] = DEFAULT_ALEXA_FEED_SCENE_MODE
+            options_data[CONF_ALEXA_FEED_RETURN_ENABLED] = DEFAULT_ALEXA_FEED_RETURN_ENABLED
+            options_data[CONF_ALEXA_FEED_RETURN_DELAY_MINUTES] = DEFAULT_ALEXA_FEED_RETURN_DELAY_MINUTES
+            options_data[CONF_ALEXA_FEED_RETURN_MODE] = DEFAULT_ALEXA_FEED_RETURN_MODE
+
+            options_data[CONF_ALEXA_MAINT_SCENE_NAME] = DEFAULT_ALEXA_MAINT_SCENE_NAME
+            options_data[CONF_ALEXA_MAINT_SCENE_MODE] = DEFAULT_ALEXA_MAINT_SCENE_MODE
+            options_data[CONF_ALEXA_MAINT_RETURN_ENABLED] = DEFAULT_ALEXA_MAINT_RETURN_ENABLED
+            options_data[CONF_ALEXA_MAINT_RETURN_DELAY_MINUTES] = (
+                DEFAULT_ALEXA_MAINT_RETURN_DELAY_MINUTES
+            )
+            options_data[CONF_ALEXA_MAINT_RETURN_MODE] = DEFAULT_ALEXA_MAINT_RETURN_MODE
+
+            options_data[CONF_ALEXA_CUSTOM_SCENE_NAME] = DEFAULT_ALEXA_CUSTOM_SCENE_NAME
+            options_data[CONF_ALEXA_CUSTOM_SCENE_MODE] = DEFAULT_ALEXA_CUSTOM_SCENE_MODE
+            options_data[CONF_ALEXA_CUSTOM_RETURN_ENABLED] = DEFAULT_ALEXA_CUSTOM_RETURN_ENABLED
+            options_data[CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES] = (
+                DEFAULT_ALEXA_CUSTOM_RETURN_DELAY_MINUTES
+            )
+            options_data[CONF_ALEXA_CUSTOM_RETURN_MODE] = DEFAULT_ALEXA_CUSTOM_RETURN_MODE
 
         enable_remote = options_data[CONF_ENABLE_REMOTE_CONTROL]
         if not enable_remote:
