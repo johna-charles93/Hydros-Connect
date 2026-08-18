@@ -10,12 +10,45 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
+    CONF_ALEXA_CUSTOM_RETURN_ENABLED,
+    CONF_ALEXA_CUSTOM_RETURN_MODE,
+    CONF_ALEXA_CUSTOM_SCENE_MODE,
+    CONF_ALEXA_CUSTOM_SCENE_NAME,
+    CONF_ALEXA_FEED_RETURN_DELAY_MINUTES,
+    CONF_ALEXA_FEED_RETURN_ENABLED,
+    CONF_ALEXA_FEED_RETURN_MODE,
+    CONF_ALEXA_FEED_SCENE_MODE,
+    CONF_ALEXA_FEED_SCENE_NAME,
+    CONF_ALEXA_MAINT_RETURN_DELAY_MINUTES,
+    CONF_ALEXA_MAINT_RETURN_ENABLED,
+    CONF_ALEXA_MAINT_RETURN_MODE,
+    CONF_ALEXA_MAINT_SCENE_MODE,
+    CONF_ALEXA_MAINT_SCENE_NAME,
+    CONF_ALEXA_TARGET_COLLECTIVE,
     CONF_ACCEPT_REMOTE_CONTROL_DISCLAIMER,
     CONF_COLLECTIVES,
+    CONF_ENABLE_ALEXA_SCENES,
     CONF_ENABLE_REMOTE_CONTROL,
     CONF_PASSWORD,
     CONF_REGION,
     CONF_USERNAME,
+    DEFAULT_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
+    DEFAULT_ALEXA_CUSTOM_RETURN_ENABLED,
+    DEFAULT_ALEXA_CUSTOM_RETURN_MODE,
+    DEFAULT_ALEXA_CUSTOM_SCENE_MODE,
+    DEFAULT_ALEXA_CUSTOM_SCENE_NAME,
+    DEFAULT_ALEXA_FEED_RETURN_DELAY_MINUTES,
+    DEFAULT_ALEXA_FEED_RETURN_ENABLED,
+    DEFAULT_ALEXA_FEED_RETURN_MODE,
+    DEFAULT_ALEXA_FEED_SCENE_MODE,
+    DEFAULT_ALEXA_FEED_SCENE_NAME,
+    DEFAULT_ALEXA_MAINT_RETURN_DELAY_MINUTES,
+    DEFAULT_ALEXA_MAINT_RETURN_ENABLED,
+    DEFAULT_ALEXA_MAINT_RETURN_MODE,
+    DEFAULT_ALEXA_MAINT_SCENE_MODE,
+    DEFAULT_ALEXA_MAINT_SCENE_NAME,
+    DEFAULT_ENABLE_ALEXA_SCENES,
     DEFAULT_REGION,
     DOMAIN,
 )
@@ -213,23 +246,197 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
     def __init__(self, config_entry: ConfigEntry) -> None:
         self._config_entry = config_entry
         self._pending_enable_remote = False
+        self._pending_options: dict[str, Any] = {}
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        collective_ids = [
+            thing_id
+            for thing_id in self._config_entry.data.get(CONF_COLLECTIVES, [])
+            if isinstance(thing_id, str) and thing_id.strip()
+        ]
+        collective_options = {thing_id: thing_id for thing_id in collective_ids}
+        default_collective = str(
+            self._config_entry.options.get(
+                CONF_ALEXA_TARGET_COLLECTIVE,
+                collective_ids[0] if collective_ids else "",
+            )
+        )
+        if default_collective not in collective_options and collective_ids:
+            default_collective = collective_ids[0]
+
         current_enabled = bool(
             self._config_entry.options.get(
                 CONF_ENABLE_REMOTE_CONTROL,
                 self._config_entry.data.get(CONF_ENABLE_REMOTE_CONTROL, False),
             )
         )
+        current_alexa_enabled = bool(
+            self._config_entry.options.get(
+                CONF_ENABLE_ALEXA_SCENES,
+                DEFAULT_ENABLE_ALEXA_SCENES,
+            )
+        )
 
-        schema = vol.Schema(
+        schema_dict: dict[Any, Any] = {
+            vol.Required(
+                CONF_ENABLE_REMOTE_CONTROL,
+                default=current_enabled,
+            ): bool,
+            vol.Required(
+                CONF_ENABLE_ALEXA_SCENES,
+                default=current_alexa_enabled,
+            ): bool,
+        }
+
+        if collective_options:
+            schema_dict[
+                vol.Required(
+                    CONF_ALEXA_TARGET_COLLECTIVE,
+                    default=default_collective,
+                )
+            ] = vol.In(collective_options)
+
+        schema_dict.update(
             {
                 vol.Required(
-                    CONF_ENABLE_REMOTE_CONTROL,
-                    default=current_enabled,
+                    CONF_ALEXA_FEED_SCENE_NAME,
+                    default=str(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_FEED_SCENE_NAME,
+                            DEFAULT_ALEXA_FEED_SCENE_NAME,
+                        )
+                    ),
+                ): str,
+                vol.Required(
+                    CONF_ALEXA_FEED_SCENE_MODE,
+                    default=str(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_FEED_SCENE_MODE,
+                            DEFAULT_ALEXA_FEED_SCENE_MODE,
+                        )
+                    ),
+                ): str,
+                vol.Required(
+                    CONF_ALEXA_FEED_RETURN_ENABLED,
+                    default=bool(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_FEED_RETURN_ENABLED,
+                            DEFAULT_ALEXA_FEED_RETURN_ENABLED,
+                        )
+                    ),
                 ): bool,
+                vol.Required(
+                    CONF_ALEXA_FEED_RETURN_DELAY_MINUTES,
+                    default=int(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_FEED_RETURN_DELAY_MINUTES,
+                            DEFAULT_ALEXA_FEED_RETURN_DELAY_MINUTES,
+                        )
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+                vol.Required(
+                    CONF_ALEXA_FEED_RETURN_MODE,
+                    default=str(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_FEED_RETURN_MODE,
+                            DEFAULT_ALEXA_FEED_RETURN_MODE,
+                        )
+                    ),
+                ): str,
+                vol.Required(
+                    CONF_ALEXA_MAINT_SCENE_NAME,
+                    default=str(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_MAINT_SCENE_NAME,
+                            DEFAULT_ALEXA_MAINT_SCENE_NAME,
+                        )
+                    ),
+                ): str,
+                vol.Required(
+                    CONF_ALEXA_MAINT_SCENE_MODE,
+                    default=str(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_MAINT_SCENE_MODE,
+                            DEFAULT_ALEXA_MAINT_SCENE_MODE,
+                        )
+                    ),
+                ): str,
+                vol.Required(
+                    CONF_ALEXA_MAINT_RETURN_ENABLED,
+                    default=bool(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_MAINT_RETURN_ENABLED,
+                            DEFAULT_ALEXA_MAINT_RETURN_ENABLED,
+                        )
+                    ),
+                ): bool,
+                vol.Required(
+                    CONF_ALEXA_MAINT_RETURN_DELAY_MINUTES,
+                    default=int(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_MAINT_RETURN_DELAY_MINUTES,
+                            DEFAULT_ALEXA_MAINT_RETURN_DELAY_MINUTES,
+                        )
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+                vol.Required(
+                    CONF_ALEXA_MAINT_RETURN_MODE,
+                    default=str(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_MAINT_RETURN_MODE,
+                            DEFAULT_ALEXA_MAINT_RETURN_MODE,
+                        )
+                    ),
+                ): str,
+                vol.Required(
+                    CONF_ALEXA_CUSTOM_SCENE_NAME,
+                    default=str(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_CUSTOM_SCENE_NAME,
+                            DEFAULT_ALEXA_CUSTOM_SCENE_NAME,
+                        )
+                    ),
+                ): str,
+                vol.Required(
+                    CONF_ALEXA_CUSTOM_SCENE_MODE,
+                    default=str(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_CUSTOM_SCENE_MODE,
+                            DEFAULT_ALEXA_CUSTOM_SCENE_MODE,
+                        )
+                    ),
+                ): str,
+                vol.Required(
+                    CONF_ALEXA_CUSTOM_RETURN_ENABLED,
+                    default=bool(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_CUSTOM_RETURN_ENABLED,
+                            DEFAULT_ALEXA_CUSTOM_RETURN_ENABLED,
+                        )
+                    ),
+                ): bool,
+                vol.Required(
+                    CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
+                    default=int(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
+                            DEFAULT_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
+                        )
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+                vol.Required(
+                    CONF_ALEXA_CUSTOM_RETURN_MODE,
+                    default=str(
+                        self._config_entry.options.get(
+                            CONF_ALEXA_CUSTOM_RETURN_MODE,
+                            DEFAULT_ALEXA_CUSTOM_RETURN_MODE,
+                        )
+                    ),
+                ): str,
             }
         )
+
+        schema = vol.Schema(schema_dict)
 
         if user_input is None:
             return self.async_show_form(
@@ -238,14 +445,40 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 errors={},
             )
 
-        enable_remote = bool(user_input.get(CONF_ENABLE_REMOTE_CONTROL, False))
+        options_data: dict[str, Any] = {
+            CONF_ENABLE_REMOTE_CONTROL: bool(user_input.get(CONF_ENABLE_REMOTE_CONTROL, False)),
+            CONF_ENABLE_ALEXA_SCENES: bool(user_input.get(CONF_ENABLE_ALEXA_SCENES, True)),
+            CONF_ALEXA_FEED_SCENE_NAME: str(user_input.get(CONF_ALEXA_FEED_SCENE_NAME, "")).strip(),
+            CONF_ALEXA_FEED_SCENE_MODE: str(user_input.get(CONF_ALEXA_FEED_SCENE_MODE, "")).strip(),
+            CONF_ALEXA_FEED_RETURN_ENABLED: bool(user_input.get(CONF_ALEXA_FEED_RETURN_ENABLED, False)),
+            CONF_ALEXA_FEED_RETURN_DELAY_MINUTES: int(user_input.get(CONF_ALEXA_FEED_RETURN_DELAY_MINUTES, 15)),
+            CONF_ALEXA_FEED_RETURN_MODE: str(user_input.get(CONF_ALEXA_FEED_RETURN_MODE, "")).strip(),
+            CONF_ALEXA_MAINT_SCENE_NAME: str(user_input.get(CONF_ALEXA_MAINT_SCENE_NAME, "")).strip(),
+            CONF_ALEXA_MAINT_SCENE_MODE: str(user_input.get(CONF_ALEXA_MAINT_SCENE_MODE, "")).strip(),
+            CONF_ALEXA_MAINT_RETURN_ENABLED: bool(user_input.get(CONF_ALEXA_MAINT_RETURN_ENABLED, False)),
+            CONF_ALEXA_MAINT_RETURN_DELAY_MINUTES: int(user_input.get(CONF_ALEXA_MAINT_RETURN_DELAY_MINUTES, 30)),
+            CONF_ALEXA_MAINT_RETURN_MODE: str(user_input.get(CONF_ALEXA_MAINT_RETURN_MODE, "")).strip(),
+            CONF_ALEXA_CUSTOM_SCENE_NAME: str(user_input.get(CONF_ALEXA_CUSTOM_SCENE_NAME, "")).strip(),
+            CONF_ALEXA_CUSTOM_SCENE_MODE: str(user_input.get(CONF_ALEXA_CUSTOM_SCENE_MODE, "")).strip(),
+            CONF_ALEXA_CUSTOM_RETURN_ENABLED: bool(user_input.get(CONF_ALEXA_CUSTOM_RETURN_ENABLED, False)),
+            CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES: int(user_input.get(CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES, 15)),
+            CONF_ALEXA_CUSTOM_RETURN_MODE: str(user_input.get(CONF_ALEXA_CUSTOM_RETURN_MODE, "")).strip(),
+        }
+
+        if collective_options:
+            options_data[CONF_ALEXA_TARGET_COLLECTIVE] = str(
+                user_input.get(CONF_ALEXA_TARGET_COLLECTIVE, default_collective)
+            ).strip()
+
+        enable_remote = options_data[CONF_ENABLE_REMOTE_CONTROL]
         if not enable_remote:
             return self.async_create_entry(
                 title="",
-                data={CONF_ENABLE_REMOTE_CONTROL: False},
+                data=options_data,
             )
 
         self._pending_enable_remote = True
+        self._pending_options = options_data
         return await self.async_step_disclaimer()
 
     async def async_step_disclaimer(
@@ -278,10 +511,18 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
         if not self._pending_enable_remote:
             return self.async_create_entry(
                 title="",
-                data={CONF_ENABLE_REMOTE_CONTROL: False},
+                data={
+                    CONF_ENABLE_REMOTE_CONTROL: False,
+                    CONF_ENABLE_ALEXA_SCENES: bool(
+                        self._config_entry.options.get(
+                            CONF_ENABLE_ALEXA_SCENES,
+                            DEFAULT_ENABLE_ALEXA_SCENES,
+                        )
+                    ),
+                },
             )
 
         return self.async_create_entry(
             title="",
-            data={CONF_ENABLE_REMOTE_CONTROL: True},
+            data=self._pending_options or {CONF_ENABLE_REMOTE_CONTROL: True},
         )

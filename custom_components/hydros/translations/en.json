@@ -24,10 +24,27 @@
   "options": {
     "step": {
       "init": {
-        "title": "Remote control",
-        "description": "Enable or disable Hydros remote control from Home Assistant.",
+        "title": "Remote control and Alexa",
+        "description": "Manage Hydros remote control and Alexa-friendly routine scenes directly in Integration Settings.",
         "data": {
-          "enable_remote_control": "Enable remote control"
+          "enable_remote_control": "Enable remote control",
+          "enable_alexa_scenes": "Enable Alexa routine scenes",
+          "alexa_target_collective": "Target collective for Alexa scenes",
+          "alexa_feed_scene_name": "Feed scene name",
+          "alexa_feed_scene_mode": "Feed start mode",
+          "alexa_feed_return_enabled": "Feed: return to another mode",
+          "alexa_feed_return_delay_minutes": "Feed: return delay (minutes)",
+          "alexa_feed_return_mode": "Feed: return mode",
+          "alexa_maint_scene_name": "Maintenance scene name",
+          "alexa_maint_scene_mode": "Maintenance start mode",
+          "alexa_maint_return_enabled": "Maintenance: return to another mode",
+          "alexa_maint_return_delay_minutes": "Maintenance: return delay (minutes)",
+          "alexa_maint_return_mode": "Maintenance: return mode",
+          "alexa_custom_scene_name": "Custom scene name (optional)",
+          "alexa_custom_scene_mode": "Custom start mode (optional)",
+          "alexa_custom_return_enabled": "Custom: return to another mode",
+          "alexa_custom_return_delay_minutes": "Custom: return delay (minutes)",
+          "alexa_custom_return_mode": "Custom: return mode"
         }
       },
       "disclaimer": {

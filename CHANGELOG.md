@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+### Added
+- Rebrand integration naming and metadata to Hydros Connect and update documentation/support URLs to the new repository.
+- Add documentation for Home Assistant + Alexa mode-control setup using `hydros.change_mode` scripts, including multi-user guidance and safety recommendations.
+- Add `examples/alexa_mode_scripts.yaml` with ready-to-copy Home Assistant scripts for mode voice control.
+- Add a 5-minute Quick Start and Alexa troubleshooting section to both README files.
+- Add README jump links plus test checklist and example Alexa phrases for faster onboarding.
+- Add HYDROS visual routine automation blueprint for no-YAML mode workflows.
+- Add integration Options UI controls for Alexa routine scenes (Feed, Maintenance, Custom) with optional auto-return behavior.
+- Add Home Assistant scene entities generated from integration options for easier Alexa exposure.
+- Add repository rebrand/ownership migration checklist documentation.
+
 ## 0.4.0 - 2026-07-28
 
 ### Added

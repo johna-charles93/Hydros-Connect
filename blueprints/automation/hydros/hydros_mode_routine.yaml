@@ -1,0 +1,84 @@
+blueprint:
+  name: HYDROS Mode Routine (Visual)
+  description: >-
+    Build HYDROS mode routines from the Home Assistant automation UI.
+    Choose any trigger, set a start mode, and optionally return to another mode after a delay.
+  domain: automation
+  source_url: https://github.com/johna-charles93/Hydros-Connect/blob/main/blueprints/automation/hydros/hydros_mode_routine.yaml
+  input:
+    routine_trigger:
+      name: Routine trigger
+      description: Choose when this routine should run.
+      selector:
+        trigger: {}
+
+    mode_entity:
+      name: HYDROS mode entity
+      description: Select the HYDROS mode select entity.
+      selector:
+        entity:
+          domain: select
+          integration: hydros
+
+    start_mode:
+      name: Start mode
+      description: Mode name exactly as shown by HYDROS.
+      selector:
+        text: {}
+
+    return_enabled:
+      name: Return to another mode
+      description: Enable to switch back after a delay.
+      default: false
+      selector:
+        boolean: {}
+
+    return_delay_minutes:
+      name: Return delay (minutes)
+      description: Wait time before applying the return mode.
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 1440
+          step: 1
+          mode: box
+
+    return_mode:
+      name: Return mode
+      description: Mode to apply after the delay when return is enabled.
+      default: Normal
+      selector:
+        text: {}
+
+mode: single
+max_exceeded: silent
+
+variables:
+  mode_entity: !input mode_entity
+  start_mode: !input start_mode
+  return_enabled: !input return_enabled
+  return_delay_minutes: !input return_delay_minutes
+  return_mode: !input return_mode
+
+trigger: !input routine_trigger
+
+condition: []
+
+action:
+  - service: hydros.change_mode
+    data:
+      entity_id: "{{ mode_entity }}"
+      mode: "{{ start_mode }}"
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ return_enabled }}"
+        sequence:
+          - delay:
+              minutes: "{{ return_delay_minutes | int(0) }}"
+          - service: hydros.change_mode
+            data:
+              entity_id: "{{ mode_entity }}"
+              mode: "{{ return_mode }}"

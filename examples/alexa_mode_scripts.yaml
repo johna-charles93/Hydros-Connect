@@ -1,0 +1,31 @@
+# Example Home Assistant scripts for HYDROS mode changes via Alexa.
+#
+# Usage:
+# 1) Copy these scripts into your Home Assistant scripts.yaml (or script UI).
+# 2) Replace select.my_collective_mode with your actual HYDROS mode select entity.
+# 3) Replace mode names to match your HYDROS config exactly.
+# 4) Expose these scripts to Alexa and create voice routines.
+
+hydros_mode_normal:
+  alias: Hydros Mode Normal
+  sequence:
+    - service: hydros.change_mode
+      data:
+        entity_id: select.my_collective_mode
+        mode: Normal
+
+hydros_mode_feed:
+  alias: Hydros Mode Feed
+  sequence:
+    - service: hydros.change_mode
+      data:
+        entity_id: select.my_collective_mode
+        mode: Feeding
+
+hydros_mode_maintenance:
+  alias: Hydros Mode Maintenance
+  sequence:
+    - service: hydros.change_mode
+      data:
+        entity_id: select.my_collective_mode
+        mode: Maintenance
