@@ -297,9 +297,13 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     if not _is_remote_control_enabled(entry):
+        _LOGGER.debug("Skipping scene setup: remote control disabled for entry %s", entry.entry_id)
         return
     if not _is_alexa_scenes_enabled(entry):
+        _LOGGER.debug("Skipping scene setup: Alexa scenes disabled for entry %s", entry.entry_id)
         return
+
+    _LOGGER.debug("Setting up Hydros Alexa scenes for entry %s", entry.entry_id)
 
     entry_data = hass.data[DOMAIN][entry.entry_id]
     if isinstance(entry_data, HydrosHub):
@@ -315,6 +319,7 @@ async def async_setup_entry(
 
     thing_id = _resolve_target_collective(entry, hub)
     if not thing_id:
+        _LOGGER.warning("No target collective resolved for scene setup in entry %s", entry.entry_id)
         return
 
     metadata = hub.get_collective_metadata(thing_id) or {}
@@ -323,6 +328,8 @@ async def async_setup_entry(
     model = metadata.get("thingType") or metadata.get("type")
 
     presets = _build_presets(entry)
+    _LOGGER.debug("Built %d scene presets for thing_id=%s", len(presets), thing_id)
+    
     entities: list[HydrosModeRoutineScene] = []
     for preset in presets:
         entities.append(
@@ -341,14 +348,18 @@ async def async_setup_entry(
         )
 
     if entities:
+        _LOGGER.info("Adding %d Hydros Alexa scenes", len(entities))
         async_add_entities(entities)
         
         # Auto-expose scenes to Alexa via persistent notification
         await _async_notify_alexa_exposure(hass, entry, entities)
+    else:
+        _LOGGER.warning("No valid scene presets found for entry %s", entry.entry_id)
 
 
 class HydrosModeRoutineScene(Scene):
     _attr_has_entity_name = False
+    _attr_icon = "mdi:play-circle"
 
     def __init__(
         self,
@@ -364,10 +375,18 @@ class HydrosModeRoutineScene(Scene):
         self._preset = preset
         self._return_manager = return_manager
         self._device_info = device_info
+        self._attr_available = True
 
         slug = slugify(f"{thing_id}-{preset.key}-{preset.display_name}")
         self._attr_unique_id = f"{hub.entry_id}-{slug}-scene"
         self._attr_name = preset.display_name
+        
+        _LOGGER.debug(
+            "Created scene: %s (unique_id=%s, mode=%s)",
+            preset.display_name,
+            self._attr_unique_id,
+            preset.start_mode,
+        )
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -387,17 +406,52 @@ class HydrosModeRoutineScene(Scene):
 
     async def async_activate(self, **kwargs: object) -> None:
         del kwargs
-        await self._hub.async_change_mode(self._thing_id, self._preset.start_mode)
+        _LOGGER.info(
+            "Activating scene '%s' -> mode '%s' (thing_id=%s)",
+            self._attr_name,
+            self._preset.start_mode,
+            self._thing_id,
+        )
+        
+        try:
+            await self._hub.async_change_mode(self._thing_id, self._preset.start_mode)
+            _LOGGER.debug(
+                "Scene '%s' activated successfully, mode changed to '%s'",
+                self._attr_name,
+                self._preset.start_mode,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error(
+                "Failed to activate scene '%s': %s",
+                self._attr_name,
+                err,
+                exc_info=True,
+            )
+            raise
 
         if not self._preset.return_enabled:
             return
 
-        await self._return_manager.async_schedule_return(
-            key=self._attr_unique_id,
-            thing_id=self._thing_id,
-            mode=self._preset.return_mode,
-            delay_minutes=self._preset.return_delay_minutes,
-        )
+        try:
+            await self._return_manager.async_schedule_return(
+                key=self._attr_unique_id,
+                thing_id=self._thing_id,
+                mode=self._preset.return_mode,
+                delay_minutes=self._preset.return_delay_minutes,
+            )
+            _LOGGER.debug(
+                "Scene '%s' scheduled auto-return to '%s' in %d minutes",
+                self._attr_name,
+                self._preset.return_mode,
+                self._preset.return_delay_minutes,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Failed to schedule return for scene '%s': %s",
+                self._attr_name,
+                err,
+                exc_info=True,
+            )
 
 
 async def _async_notify_alexa_exposure(
