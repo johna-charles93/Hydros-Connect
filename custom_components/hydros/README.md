@@ -58,6 +58,62 @@ From this options screen, users can:
 
 These scene entities are generated automatically and can be exposed to Alexa without editing YAML.
 
+## Alexa Setup (Complete Guide)
+
+### Step 1: Configure Scenes in HA Settings (Done automatically)
+When you enable Alexa scenes in Hydros integration settings, the integration creates scene entities for each mode you configure (Feed Mode, Maintenance Mode, Custom Mode, etc.). You'll see a notification in Home Assistant with a list of scenes created.
+
+### Step 2: Expose Scenes to Alexa (Required for voice control)
+1. Go to **Settings → Devices & Services → Alexa** in Home Assistant
+2. Click the **⋮ (three dots)** button → **Manage Entities**
+3. Search for your tank name or "hydros"
+4. Find the scene entities listed (e.g., "Feed Mode", "Maintenance Mode")
+5. **Toggle each scene ON** to expose it to Alexa
+
+The integration now sends you a notification with these exact steps when scenes are first created.
+
+### Step 3: Use Voice Commands
+Once exposed, you can ask Alexa:
+- **"Alexa, activate Feed Mode"** (scene name)
+- **"Alexa, turn on Maintenance Mode"** (scene name)
+
+### Step 4 (Optional): Create Alexa Routines
+For custom voice phrases, create a routine in the Alexa app:
+1. Open Alexa app → **Routines** → **Create**
+2. Trigger: "When you say 'feed the reef'" (or your phrase)
+3. Action: **Scenes → [Your Tank] Feed Mode**
+4. Save
+
+Now you can say **"Alexa, feed the reef"** and it triggers your custom scene.
+
+### Auto-Return Behavior
+If you enable auto-return when configuring scenes:
+- Scene triggers tank mode (e.g., Feeding)
+- After the delay you set (default 30 mins), tank automatically returns to the previous mode
+- This works even if Home Assistant restarts during the delay
+
+### Troubleshooting
+
+**"I don't see the scenes in Alexa's Manage Entities"**
+- Make sure you enabled Alexa scenes in Hydros settings
+- Check the Home Assistant notification that appeared when you set up scenes
+- Restart Home Assistant if you just enabled Alexa integration
+- Make sure you're looking in the right Alexa integration (if you have multiple)
+
+**"Alexa says 'That scene isn't available'"**
+- Did you toggle the scene ON in Manage Entities? (Step 2 above)
+- Wait a minute after toggling and ask Alexa again
+- Try "Alexa, discover devices" to refresh the Alexa integration
+
+**"Auto-return didn't happen"**
+- Check that you enabled "Auto return" for that scene in Hydros settings
+- Make sure the return mode is set to a valid mode (check the dropdown)
+- If HA restarted, returns reschedule automatically (wait a moment for the scene to re-engage)
+
+### Next Steps
+- Check the [Automation Blueprint](../../blueprints/automation/hydros/hydros_mode_routine.yaml) if you prefer YAML-based automations
+- See [examples/alexa_mode_scripts.yaml](../../examples/alexa_mode_scripts.yaml) for legacy script-based approach
+
 ### Built-in setup validation
 
 - Use the `Validate Setup` button entity from the Hydros device page in Home Assistant.

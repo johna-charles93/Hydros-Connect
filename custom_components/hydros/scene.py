@@ -14,6 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
+from homeassistant.components.persistent_notification import async_create
 
 from .const import (
     CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
@@ -341,6 +342,9 @@ async def async_setup_entry(
 
     if entities:
         async_add_entities(entities)
+        
+        # Auto-expose scenes to Alexa via persistent notification
+        await _async_notify_alexa_exposure(hass, entry, entities)
 
 
 class HydrosModeRoutineScene(Scene):
@@ -394,3 +398,55 @@ class HydrosModeRoutineScene(Scene):
             mode=self._preset.return_mode,
             delay_minutes=self._preset.return_delay_minutes,
         )
+
+
+async def _async_notify_alexa_exposure(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    entities: list[HydrosModeRoutineScene],
+) -> None:
+    """Create persistent notification guiding users to expose scenes to Alexa."""
+    if not entities:
+        return
+
+    # Check if we've already notified for this entry
+    notification_key = f"hydros_alexa_setup_{entry.entry_id}"
+    stored_notified = hass.data.get("hydros_alexa_notified", {})
+    if stored_notified.get(entry.entry_id):
+        return
+
+    scene_list = "\n".join([f"• {entity.name}" for entity in entities])
+
+    notification_msg = f"""
+**Hydros Scenes Ready for Alexa!**
+
+Your Alexa mode scenes are set up and ready. Here's how to use them:
+
+**Scenes created:**
+{scene_list}
+
+**Next step:**
+1. Open **Settings → Devices & Services → Alexa** in Home Assistant
+2. Click the three dots (⋮) → **Manage Entities**
+3. Search for "hydros" or your scene names above
+4. Toggle them ON to expose to Alexa
+
+**Then ask Alexa:**
+- "Alexa, activate Feed Mode"
+- "Alexa, turn on Maintenance Mode"
+- Or set them up in Alexa routines for custom voice phrases
+
+Need help? Check the [Hydros README](https://github.com/johna-charles93/Hydros-Connect/blob/main/custom_components/hydros/README.md#alexa-setup)
+"""
+
+    if not stored_notified:
+        hass.data["hydros_alexa_notified"] = {}
+
+    async_create(
+        hass,
+        notification_msg,
+        title="Hydros Alexa Setup",
+        notification_id=notification_key,
+    )
+
+    hass.data["hydros_alexa_notified"][entry.entry_id] = True
