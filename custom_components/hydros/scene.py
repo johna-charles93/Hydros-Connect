@@ -378,13 +378,16 @@ class HydrosModeRoutineScene(Scene):
         self._attr_available = True
 
         slug = slugify(f"{thing_id}-{preset.key}-{preset.display_name}")
+        scene_slug = slugify(preset.display_name)
         self._attr_unique_id = f"{hub.entry_id}-{slug}-scene"
+        self._attr_entity_id = f"scene.{scene_slug}"
         self._attr_name = preset.display_name
         
         _LOGGER.debug(
-            "Created scene: %s (unique_id=%s, mode=%s)",
+            "Created scene: %s (unique_id=%s, entity_id=%s, mode=%s)",
             preset.display_name,
             self._attr_unique_id,
+            self._attr_entity_id,
             preset.start_mode,
         )
 
