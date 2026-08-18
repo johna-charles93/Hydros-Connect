@@ -5,10 +5,7 @@
 ## Summary
 Custom Home Assistant integration for Hydros controllers. It connects to the Hydros cloud API to expose inputs, outputs, dosing history, and device health in Home Assistant.
 
-This repository is a community fork based on the original HA-Hydros project by Bitf1ip:
-https://github.com/Bitf1ip/ha-hydros
-
-All credit for the original architecture and baseline integration belongs to the original creator.
+**Hydros Connect** is a Home Assistant integration for HYDROS aquarium controllers.
 
 ![Example](dashboard.png)
 
@@ -67,12 +64,10 @@ These scene entities are generated automatically and can be exposed to Alexa wit
 - It creates a persistent notification report showing checks, warnings, and errors for common setup issues.
 - Include this report in bug tickets for faster support.
 
-## Attribution
+## Attribution & Maintenance
 
-- Original project and maintainer: Bitf1ip, HA-Hydros
-- Original repository: https://github.com/Bitf1ip/ha-hydros
 - Current maintained repository: https://github.com/johna-charles93/Hydros-Connect
-- This fork extends the original integration with controller selection and optional remote control improvements while keeping monitoring-first behavior by default.
+- Features: Multi-device support, remote mode control, Alexa integration, Nabu Casa support
 
 ## Known Limitations
 

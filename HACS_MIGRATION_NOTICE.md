@@ -3,7 +3,7 @@
 Hydros Connect has moved to a new maintained repository:
 
 - New repository: https://github.com/johna-charles93/Hydros-Connect
-- Previous repository: https://github.com/Bitf1ip/ha-hydros
+- New repository: https://github.com/johna-charles93/Hydros-Connect
 
 ## What this means for users
 

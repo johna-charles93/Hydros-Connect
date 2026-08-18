@@ -62,8 +62,8 @@ All notable changes to this project are documented in this file.
 ## 0.3.5 - 2026-07-07
 
 ### Added
-- Add explicit attribution to the original HA-Hydros project and maintainer in both top-level and integration README files.
 - Add a dedicated Known Limitations section covering cloud dependency, output schema variability, and remote-control opt-in behavior.
+- Improve documentation and attribution clarity.
 
 ### Fixed
 - Improve binary output detection so common outlet/relay output types are exposed as switch entities when remote control is enabled.

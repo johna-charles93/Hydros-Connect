@@ -96,7 +96,7 @@ class HydrosHub:
         self._debug_samples: dict[str, dict[str, Any]] = {}
         self._mqtt_primary: str | None = None
         self._mqtt_lock = asyncio.Lock()
-        self._mqtt_client_id: str = f"ha-hydros-{uuid.uuid4().hex}"
+        self._mqtt_client_id: str = f"hydros-connect-{uuid.uuid4().hex}"
         self._username: str = entry.data[CONF_USERNAME]
         self._password: str = entry.data[CONF_PASSWORD]
         self._region: str = entry.data.get(CONF_REGION, DEFAULT_REGION)
