@@ -340,18 +340,23 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
             except Exception:  # noqa: BLE001
                 mode_options = []
 
-        mode_selector: Any = str
+        mode_optional_selector: Any = str
         if mode_options:
-            mode_selector = vol.In({mode: mode for mode in mode_options})
+            mode_map = {mode: mode for mode in mode_options}
+            mode_optional_selector = vol.Any("", vol.In(mode_map))
 
         def _mode_default(option_key: str, fallback: str) -> str:
-            current = str(self._config_entry.options.get(option_key, fallback)).strip() or fallback
+            current = str(self._config_entry.options.get(option_key, fallback)).strip()
             if not mode_options:
-                return current
+                return current or fallback
             if current in mode_options:
                 return current
+            if not current and not fallback:
+                return ""
             if fallback in mode_options:
                 return fallback
+            if not fallback:
+                return ""
             return mode_options[0]
 
         schema_dict: dict[Any, Any] = {
@@ -394,7 +399,7 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                         CONF_ALEXA_FEED_SCENE_MODE,
                         DEFAULT_ALEXA_FEED_SCENE_MODE,
                     ),
-                ): mode_selector,
+                ): mode_optional_selector,
                 vol.Required(
                     CONF_ALEXA_FEED_RETURN_ENABLED,
                     default=bool(
@@ -419,7 +424,7 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                         CONF_ALEXA_FEED_RETURN_MODE,
                         DEFAULT_ALEXA_FEED_RETURN_MODE,
                     ),
-                ): mode_selector,
+                ): mode_optional_selector,
                 vol.Required(
                     CONF_ALEXA_MAINT_SCENE_NAME,
                     default=str(
@@ -435,7 +440,7 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                         CONF_ALEXA_MAINT_SCENE_MODE,
                         DEFAULT_ALEXA_MAINT_SCENE_MODE,
                     ),
-                ): mode_selector,
+                ): mode_optional_selector,
                 vol.Required(
                     CONF_ALEXA_MAINT_RETURN_ENABLED,
                     default=bool(
@@ -460,7 +465,7 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                         CONF_ALEXA_MAINT_RETURN_MODE,
                         DEFAULT_ALEXA_MAINT_RETURN_MODE,
                     ),
-                ): mode_selector,
+                ): mode_optional_selector,
                 vol.Required(
                     CONF_ALEXA_CUSTOM_SCENE_NAME,
                     default=str(
@@ -476,7 +481,7 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                         CONF_ALEXA_CUSTOM_SCENE_MODE,
                         DEFAULT_ALEXA_CUSTOM_SCENE_MODE,
                     ),
-                ): mode_selector,
+                ): mode_optional_selector,
                 vol.Required(
                     CONF_ALEXA_CUSTOM_RETURN_ENABLED,
                     default=bool(
@@ -501,7 +506,7 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                         CONF_ALEXA_CUSTOM_RETURN_MODE,
                         DEFAULT_ALEXA_CUSTOM_RETURN_MODE,
                     ),
-                ): mode_selector,
+                ): mode_optional_selector,
             }
         )
 

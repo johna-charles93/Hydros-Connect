@@ -1,10 +1,30 @@
 # Hydros Alexa Scene Activation - Debug Guide
 
-## Current Status
-- ✅ Scenes ARE being created in Home Assistant
-- ✅ Scenes ARE exposed to Alexa Voice Assistants
-- ❌ Scenes show "Unknown" state in entity list
-- ❌ Voice commands don't activate scenes
+## Recommended Setup (Proven Working)
+
+Use this as the default setup. It avoids Alexa matching scene phrases to TVs or other devices.
+
+1. In Home Assistant, expose only the Hydros routine scenes to Alexa (Feed, Maintenance, and optional Custom).
+2. Give scenes unique names that include "Hydros" (example: "Hydros Feed Scene", "Hydros Maintenance Scene").
+3. In Alexa, run discovery after exposure changes.
+4. Create Alexa routines for natural phrases:
+   - Phrase: "set reef to feed mode" -> Action: run "Hydros Feed Scene"
+   - Phrase: "set reef to maintenance mode" -> Action: run "Hydros Maintenance Scene"
+5. Test from Alexa voice, then confirm in HA logs that scene activation occurred.
+
+Why this works:
+- Alexa direct scene parsing can collide with existing device names (TV, display, etc.).
+- Routines force an explicit mapping from phrase -> scene, which is far more reliable.
+
+## Quick Recovery If Scenes Disappear In Alexa
+
+1. Confirm scenes are still exposed in Home Assistant:
+   - Settings -> Voice assistants -> Alexa -> Expose
+2. If missing in Alexa app, run "Alexa, discover devices".
+3. If still missing, disable and re-enable the Home Assistant Smart Home skill, then rediscover.
+4. Re-open Alexa routines and ensure each routine still points to the intended Hydros scene.
+
+Note: Scenes often do not show in the same place as regular devices. Check Alexa scenes/routines, not only device cards.
 
 ## What v0.5.5 Adds
 - **Comprehensive logging** at scene creation, activation, and error points

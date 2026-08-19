@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file.
 
 ### Added
 - Rebrand integration naming and metadata to Hydros Connect and update documentation/support URLs to the new repository.
+- Document a proven Alexa setup path using unique Hydros scene names plus Alexa routines for natural phrases like "set reef to feed mode".
 - Add documentation for Home Assistant + Alexa mode-control setup using `hydros.change_mode` scripts, including multi-user guidance and safety recommendations.
 - Add `examples/alexa_mode_scripts.yaml` with ready-to-copy Home Assistant scripts for mode voice control.
 - Add a 5-minute Quick Start and Alexa troubleshooting section to both README files.
@@ -20,6 +21,11 @@ All notable changes to this project are documented in this file.
 - Clarify Alexa voice-control prerequisites in documentation (Nabu Casa or self-hosted Alexa Smart Home setup).
 - Add explicit Nabu Casa entity-exposure guidance and recommend exposing Hydros routine scenes for simpler Alexa setup.
 - Add GitHub issue templates for bug reports and feature requests, including setup-validation diagnostics prompts.
+- Add Alexa stats query guidance (sensor naming, exposure, and test phrases) to setup documentation.
+
+### Changed
+- Allow Alexa scene mode fields in integration options to be left blank so users can disable individual scenes without removing the whole feature.
+- Expand `Validate Setup` report with Alexa stats readiness checks for common sensor types (temperature, pH, salinity, ORP), including unavailable-sensor warnings.
 
 ## 0.4.0 - 2026-07-28
 

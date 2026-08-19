@@ -24,6 +24,7 @@ Example of good usage for this integration includes: long term metrics, triggeri
 - [Quick Start (Alexa Mode Control in ~5 Minutes)](#quick-start-alexa-mode-control-in-5-minutes)
 - [Managed in HA Settings (No YAML)](#managed-in-ha-settings-no-yaml)
 - [Alexa Voice Control (Mode Changes)](#alexa-voice-control-mode-changes)
+- [Alexa Stats Queries](#alexa-stats-queries)
 - [Visual Routine Builder (No YAML)](#visual-routine-builder-no-yaml)
 - [Troubleshooting](#troubleshooting)
 - [Sample Scripts File](../../examples/alexa_mode_scripts.yaml)
@@ -54,6 +55,7 @@ From this options screen, users can:
 - Use an easy setup profile (recommended defaults for non-developers).
 - Select the target collective.
 - Set scene names and mode mappings for Feed, Maintenance, and one Custom scene (with mode dropdowns when available).
+- Disable an individual scene by leaving its scene name or mode blank.
 - Configure optional auto-return mode and return delay.
 
 These scene entities are generated automatically and can be exposed to Alexa without editing YAML.
@@ -85,6 +87,14 @@ For custom voice phrases, create a routine in the Alexa app:
 4. Save
 
 Now you can say **"Alexa, feed the reef"** and it triggers your custom scene.
+
+### Recommended routine pattern (proven)
+
+- Prefer Alexa routines for phrases like "set reef to feed mode" and "set reef to maintenance mode".
+- Use unique scene names (for example: "Hydros Feed Scene", "Hydros Maintenance Scene").
+- After changing exposure or names, run Alexa device discovery again.
+
+This avoids Alexa intent collisions with similarly named devices (such as TVs/displays).
 
 ### Auto-Return Behavior
 If you enable auto-return when configuring scenes:
@@ -269,6 +279,31 @@ Replace `select.my_collective_mode` and mode names with values from your own Hyd
 - "Alexa, start reef feed mode"
 
 Use short, distinct phrases and avoid words that sound similar to device names in your home.
+
+## Alexa Stats Queries
+
+You can ask Alexa for tank readings (for example, temperature) by exposing clearly named Hydros sensors.
+
+### Recommended setup
+
+1. In Home Assistant, expose only the sensor entities you want Alexa to answer.
+2. Use clear sensor names (examples):
+  - Reef Temperature
+  - Reef pH
+  - Reef Salinity
+3. Run Alexa discovery after changing exposure or names.
+4. Test phrases like:
+  - Alexa, what is Reef Temperature?
+  - Alexa, what is Reef pH?
+
+### If direct Q&A is inconsistent
+
+Use Alexa routines with announcements:
+
+1. Trigger phrase: "reef stats"
+2. Action: Ask Home Assistant Assist / announce values via your preferred Alexa routine flow
+
+Tip: Run the `Validate Setup` button from the Hydros device page. The report now includes Alexa stats readiness checks for common sensor types.
 
 ## Visual Routine Builder (No YAML)
 

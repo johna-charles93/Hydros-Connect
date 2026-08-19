@@ -7,6 +7,8 @@ from homeassistant.components import persistent_notification
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import slugify
@@ -183,6 +185,62 @@ class HydrosSetupValidationButton(ButtonEntity):
         _validate_scene(CONF_ALEXA_MAINT_SCENE_NAME, CONF_ALEXA_MAINT_SCENE_MODE, "Maintenance")
         _validate_scene(CONF_ALEXA_CUSTOM_SCENE_NAME, CONF_ALEXA_CUSTOM_SCENE_MODE, "Custom")
 
+        # Alexa stats readiness checks (temperature, pH, salinity, etc.)
+        sensor_entries = self._collect_target_sensor_entries(target_collective)
+        if sensor_entries:
+            checks.append(
+                f"Found {len(sensor_entries)} sensor entities for target collective '{target_collective}'"
+            )
+        else:
+            warnings.append(
+                "No sensor entities were found for the target collective; Alexa stats queries will not work"
+            )
+
+        keyword_groups: dict[str, tuple[str, ...]] = {
+            "temperature": ("temperature", "temp"),
+            "pH": ("ph",),
+            "salinity": ("salinity", "conductivity", "tds"),
+            "ORP": ("orp",),
+        }
+
+        detected_stats: dict[str, list[str]] = {key: [] for key in keyword_groups}
+        unavailable_stats: list[str] = []
+
+        for registry_entry in sensor_entries:
+            friendly = (
+                (registry_entry.name or "").strip()
+                or (registry_entry.original_name or "").strip()
+                or registry_entry.entity_id
+            )
+            lowered = friendly.lower()
+            for label, keywords in keyword_groups.items():
+                if any(token in lowered for token in keywords):
+                    detected_stats[label].append(friendly)
+                    state_obj = self.hass.states.get(registry_entry.entity_id)
+                    if state_obj is None or state_obj.state in {"unknown", "unavailable"}:
+                        unavailable_stats.append(f"{friendly} ({registry_entry.entity_id})")
+                    break
+
+        for label, matches in detected_stats.items():
+            if matches:
+                checks.append(f"Alexa stats candidate ({label}): {', '.join(sorted(set(matches))[:3])}")
+
+        if not any(detected_stats.values()):
+            warnings.append(
+                "No common stats sensors detected (temperature/pH/salinity/ORP). "
+                "Expose a Hydros sensor with a clear name for Alexa queries."
+            )
+
+        if unavailable_stats:
+            warnings.append(
+                "Some stats sensors are currently unknown/unavailable: "
+                + "; ".join(unavailable_stats[:4])
+            )
+
+        checks.append(
+            "For Alexa stats, use short routine phrases and map them to announcements if direct sensor Q&A is inconsistent"
+        )
+
         lines = ["Hydros setup validation report", ""]
         if checks:
             lines.append("Checks")
@@ -206,3 +264,27 @@ class HydrosSetupValidationButton(ButtonEntity):
             title=title,
             notification_id=f"hydros_setup_validation_{self._entry.entry_id}_{target_collective}",
         )
+
+    def _collect_target_sensor_entries(self, target_collective: str) -> list[er.RegistryEntry]:
+        entity_registry = er.async_get(self.hass)
+        device_registry = dr.async_get(self.hass)
+
+        target_device_ids: set[str] = set()
+        for device in dr.async_entries_for_config_entry(device_registry, self._entry.entry_id):
+            if (DOMAIN, target_collective) in device.identifiers:
+                target_device_ids.add(device.id)
+
+        if not target_device_ids:
+            return []
+
+        entries = er.async_entries_for_config_entry(entity_registry, self._entry.entry_id)
+        sensors: list[er.RegistryEntry] = []
+        for entry in entries:
+            if entry.domain != "sensor":
+                continue
+            if entry.device_id not in target_device_ids:
+                continue
+            if entry.disabled_by is not None:
+                continue
+            sensors.append(entry)
+        return sensors
