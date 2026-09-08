@@ -16,6 +16,7 @@ from homeassistant.util import slugify
 
 from .const import CONF_ENABLE_REMOTE_CONTROL, DEFAULT_AVAILABILITY_WINDOW_SECONDS, DOMAIN
 from .entity_builders import build_output_display_name
+from .hub_base import HydrosHubBase
 from .hydros_hub import HydrosHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ async def async_setup_entry(
         return
 
     entry_data = hass.data[DOMAIN][entry.entry_id]
-    if isinstance(entry_data, HydrosHub):
+    if isinstance(entry_data, HydrosHubBase):
         entry_data = {"hub": entry_data}
         hass.data[DOMAIN][entry.entry_id] = entry_data
 

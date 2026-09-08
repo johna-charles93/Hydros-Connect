@@ -4,8 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.0 - 2026-09-08
+
 ### Added
+- Add support for the official CoralVue HYDROS Public API (`https://api.coralvuehydros.com`) as a second, recommended authentication path. Setup now starts with a menu: **Official HYDROS API** (provider key + device key) or **HYDROS account login** (the existing, now-deprecated email/password path).
+- API path: per-device config entries keyed on the device key, REST polling every ~30s via a renewing session token, output/mode control through the overrides + command endpoints, first-class manual dosing via the `dose` command, read-only vs read/write key detection, and reauth support.
 - Rebrand integration naming and metadata to Hydros Connect and update documentation/support URLs to the new repository.
+
+### Changed
+- Entity platforms now accept either hub implementation via a shared `HydrosHubBase`; the legacy account-credential path is unchanged.
+
+### Known limitations (API path)
+- No dosing-log endpoint in the Public API, so the per-doser "Dosed Today" sensors are not created when connected via the official API.
+- The Public API is poll-only (no MQTT push); expect ~30s latency and standard staleness-window unavailability when polling stops or the device goes offline.
+- Sensor typing (units / device class) for inputs is inferred from the input name and reported fields, since the API state document carries no `senseMode`/`probeMode`.
 - Document a proven Alexa setup path using unique Hydros scene names plus Alexa routines for natural phrases like "set reef to feed mode".
 - Add documentation for Home Assistant + Alexa mode-control setup using `hydros.change_mode` scripts, including multi-user guidance and safety recommendations.
 - Add `examples/alexa_mode_scripts.yaml` with ready-to-copy Home Assistant scripts for mode voice control.

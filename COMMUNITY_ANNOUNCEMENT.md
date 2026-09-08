@@ -1,5 +1,24 @@
 # 🎉 Hydros Connect: Moved, Improved, and Ready for the Official API
 
+> ## 🆕 Update — v0.6.0 (8 Sep 2026): Official HYDROS API support is live
+>
+> The official CoralVue HYDROS Public API path has shipped. When you add the
+> integration you now choose **Official HYDROS API (recommended)** or **HYDROS
+> account login (deprecated)**.
+>
+> - **You bring your own keys.** Request an *unlisted* provider key from CoralVue
+>   at <https://www.coralvuehydros.com/api/#request-provider-key>, then create a
+>   *device key* per controller in the HYDROS app (read-only or read/write).
+> - **Existing account-login setups keep working** — nothing to do unless you
+>   want to switch.
+> - **On the API path:** state polls ~every 30s (no push), one entry per device,
+>   and the "Dosed Today" doser sensors aren't available (the API has no
+>   dosing-log endpoint). Everything else — sensors, mode/output control,
+>   manual dosing, Alexa scenes — works.
+>
+> Full notes: [RELEASE_NOTES.md](RELEASE_NOTES.md) ·
+> [README](README.md) · [API migration plan](API_KEY_MIGRATION_PLAN.md)
+
 Hi everyone! We have some exciting news to share about Hydros in Home Assistant.
 
 ## 📦 The Big Move

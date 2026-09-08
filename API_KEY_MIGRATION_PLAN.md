@@ -1,44 +1,70 @@
-# HYDROS Official API Key Migration Plan
+# HYDROS Official API Migration
 
-This document outlines a safe migration path from account credential auth to the official HYDROS Provider Key + Device Key model.
+Status of the move from reverse-engineered account auth to the official CoralVue
+HYDROS Public API.
 
-## Goals
+## Where things stand
 
-- Preserve existing installs during migration.
-- Add official API support in parallel.
-- Move new users to key-based auth by default once stable.
+The integration now supports **two auth paths**, chosen from a menu at the start
+of setup:
 
-## Proposed phases
+| Path | Credentials | Transport | Status |
+|------|-------------|-----------|--------|
+| **Official HYDROS API** (`AUTH_MODE_API`) | per-user **provider key** + per-device **device key** | REST polling (`https://api.coralvuehydros.com`) | new, recommended |
+| **HYDROS account login** (`AUTH_MODE_LEGACY`) | account email + password | Cognito + AWS IoT MQTT + signed S3 | unchanged, deprecated |
 
-1. Add parallel auth mode in config flow
-- `Account credentials (legacy)`
-- `Provider key + Device key (official)`
+Legacy entries keep working untouched. New installs should use the official API.
 
-2. Implement official-key client path
-- Device lookup
-- State reads
-- Mode/output write operations used by this integration
+## API path design
 
-3. Feature parity validation
-- Sensors
-- Mode control
-- Alexa routine scenes
-- Recovery and retries under rate limits
+* **One config entry per device.** The device key is device-scoped, so
+  `collective_ids` always has exactly one element. Multi-controller setups add
+  the integration once per device. Unique id: `api:{deviceId}`.
+* **Provider key is per-user**, entered by the user in the config flow. Nothing
+  secret is shipped in the repo. Users request an *unlisted* provider key at
+  <https://www.coralvuehydros.com/api/#request-provider-key> so their own quota
+  is not consumed by other people's clients.
+* **Polling.** `POST /api/v1/device/state/session` mints a 6-hour ES256 poll
+  token; the hub polls `pollUrl` every ~30s and renews the session ~30 min
+  before expiry (and on `401`). `404` from the state endpoint = device offline;
+  entities fall `unavailable` on the normal staleness window.
+* **Entity modelling** is synthesised (`api_hub._build_synth_config`) from
+  `GET /api/v1/device/overrides/metadata` (output keys, `bool`/`level`/`flag`/`mode`
+  types, ranges, `commands`) plus the live state document. The synthesised
+  config mimics the S3-config shape the entity platforms already consume.
+* **Control:**
+  * mode → `POST /api/v1/device/overrides/mode/command {"command": <mode>}`
+  * on/off (bool) → `PUT /api/v1/device/overrides {key: bool}`; "auto" → `DELETE /overrides/{key}`
+  * pump speed (level) → `PUT /overrides {key: 0..10000}` (percent × 100, clamped to metadata range)
+  * manual dose → `POST /overrides/{key}/command {"command":"dose","value": ml×10}` clamped to the `arg` bounds
+  * all writes use `receipt=1` to confirm delivery; `get_command_status` /
+    `get_pending_command_count` reflect it.
+* **Permission.** The device key's read vs read/write level is probed at setup
+  with an empty `PUT /overrides` (a documented no-op). Read-only keys record
+  `CONF_KEY_PERMISSION=read`; control entities are suppressed and control calls
+  raise a clear error.
 
-4. Controlled default switch
-- New installs default to official API keys.
-- Existing installs continue on legacy mode until user migrates.
+## Known gaps / follow-ups
 
-5. Deprecation messaging
-- Add migration notices and timeline once HYDROS publishes firm deprecation guidance.
+- **Dosing history.** No public logs endpoint → "Dosed Today" sensors are not
+  created on the API path. Revisit if CoralVue adds one.
+- **Input sensor typing.** The state document has no `senseMode`/`probeMode`, so
+  units / device classes are inferred from the input name + reported fields
+  (`api_hub._classify_input`). Rope-leak inputs can't be detected and won't
+  become moisture binary sensors on the API path.
+- **HMAC V2 auth** (`HYDROS-HMAC-SHA256 …`) is not implemented; the client uses
+  V1 simple auth. V2 would reduce replay risk but still needs a client-side
+  secret.
+- **Legacy deprecation timeline** is not yet wired into user-facing repair
+  issues — pending firm guidance from CoralVue on when the consumer backend
+  path stops working.
+- **iot_class** in the manifest is still `cloud_push` (accurate for the legacy
+  path); the API path is polling.
 
-## UX requirements
+## Open questions for CoralVue
 
-- Keep setup non-developer friendly.
-- Include copy/paste validation and permission checks.
-- Expose clear errors for invalid key scopes (read-only vs read/write).
-
-## Safety requirements
-
-- Enforce least privilege by default (read-only unless control is explicitly enabled).
-- Preserve current remote-control disclaimer behavior.
+1. When does the reverse-engineered `cv.hydros.link` / IoT MQTT path stop
+   working for updated firmware?
+2. Any endpoint (planned) for historical dosing logs?
+3. How do multi-controller collectives map to device keys — one key per
+   physical controller, or one per collective?

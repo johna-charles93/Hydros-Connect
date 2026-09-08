@@ -5,6 +5,38 @@ CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_REGION = "region"
 CONF_COLLECTIVES = "collectives"
+
+# ---------------------------------------------------------------------------
+# Authentication mode
+# ---------------------------------------------------------------------------
+# "legacy" — the original reverse-engineered path: HYDROS account email +
+#            password, AWS Cognito auth, AWS IoT MQTT for live data, signed-S3
+#            config download. Kept working for existing installs.
+# "api"    — the official CoralVue HYDROS Public API (https://api.coralvuehydros.com):
+#            per-user provider key + device key, REST polling only.
+CONF_AUTH_MODE = "auth_mode"
+AUTH_MODE_LEGACY = "legacy"
+AUTH_MODE_API = "api"
+
+# Official Public API credentials / identifiers.
+CONF_PROVIDER_KEY = "provider_key"
+CONF_DEVICE_KEY = "device_key"
+CONF_DEVICE_ID = "device_id"
+CONF_KEY_PERMISSION = "key_permission"  # "read" or "write"
+
+KEY_PERMISSION_READ = "read"
+KEY_PERMISSION_WRITE = "write"
+
+# Public API tuning.
+HYDROS_API_BASE_URL = "https://api.coralvuehydros.com"
+# Server advertises a 30s poll floor; GET /device/state is capped at 10/min.
+DEFAULT_API_POLL_INTERVAL = 30
+# Session poll tokens live 6h; renew with margin to spare.
+DEFAULT_API_SESSION_RENEW_MARGIN = 1800  # 30 minutes
+# Override metadata only changes on device reconfiguration; cache aggressively.
+DEFAULT_API_METADATA_TTL = 900  # 15 minutes
+# HTTP timeout for a single Public API request.
+DEFAULT_API_REQUEST_TIMEOUT = 30
 CONF_ENABLE_REMOTE_CONTROL = "enable_remote_control"
 CONF_ACCEPT_REMOTE_CONTROL_DISCLAIMER = "accept_remote_control_disclaimer"
 CONF_ENABLE_ALEXA_SCENES = "enable_alexa_scenes"

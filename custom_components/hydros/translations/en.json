@@ -4,11 +4,35 @@
     "step": {
       "user": {
         "title": "Connect to Hydros",
-        "description": "Enter the credentials used for the Hydros web portal."
+        "description": "Choose how Home Assistant connects to your HYDROS system.",
+        "menu_options": {
+          "api": "Official HYDROS API (recommended)",
+          "legacy": "HYDROS account login (deprecated)"
+        }
+      },
+      "api": {
+        "title": "HYDROS Public API",
+        "description": "Enter a provider key and a device key.\n\n1. Request your own provider key at coralvuehydros.com/api (use the \"unlisted\" option for personal/scripted access).\n2. In the HYDROS app, create a device key for the device you want to expose. Choose \"Read & write\" if you want remote control, or \"Read only\" for monitoring.\n\nOne device key = one device, so add the integration again for each additional controller.",
+        "data": {
+          "provider_key": "Provider key",
+          "device_key": "Device key"
+        }
+      },
+      "legacy": {
+        "title": "HYDROS account login (deprecated)",
+        "description": "Enter the email and password used for the HYDROS web portal.\n\nThis path relies on HYDROS' consumer backend and is expected to stop working as devices move to the official API. New installs should use the official HYDROS API instead."
       },
       "collectives": {
         "title": "Select collectives",
         "description": "Choose one or more collectives to expose in Home Assistant."
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate HYDROS",
+        "description": "The stored HYDROS keys were rejected. Enter a current provider key and device key.",
+        "data": {
+          "provider_key": "Provider key",
+          "device_key": "Device key"
+        }
       }
     },
     "error": {
@@ -18,7 +42,9 @@
       "select_collective": "Select at least one collective."
     },
     "abort": {
-      "no_collectives": "No collectives available for this account."
+      "no_collectives": "No collectives available for this account.",
+      "already_configured": "This HYDROS device is already set up.",
+      "reauth_successful": "HYDROS re-authentication succeeded."
     }
   },
   "options": {

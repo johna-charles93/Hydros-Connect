@@ -20,6 +20,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, DEFAULT_AVAILABILITY_WINDOW_SECONDS
+from .hub_base import HydrosHubBase
 from .hydros_hub import HydrosHub
 from .entity_builders import build_output_binary_description, build_rope_leak_description
 from .sensor import (
@@ -49,7 +50,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     entry_data = hass.data[DOMAIN][entry.entry_id]
-    if isinstance(entry_data, HydrosHub):
+    if isinstance(entry_data, HydrosHubBase):
         entry_data = {"hub": entry_data}
         hass.data[DOMAIN][entry.entry_id] = entry_data
 

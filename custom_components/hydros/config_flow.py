@@ -8,8 +8,23 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .api import (
+    HydrosApiAuthError,
+    HydrosApiError,
+    HydrosPublicApiClient,
+)
 from .const import (
+    AUTH_MODE_API,
+    AUTH_MODE_LEGACY,
+    CONF_AUTH_MODE,
+    CONF_DEVICE_ID,
+    CONF_DEVICE_KEY,
+    CONF_KEY_PERMISSION,
+    CONF_PROVIDER_KEY,
+    KEY_PERMISSION_READ,
+    KEY_PERMISSION_WRITE,
     CONF_ALEXA_EASY_SETUP,
     CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
     CONF_ALEXA_CUSTOM_RETURN_ENABLED,
@@ -74,6 +89,37 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_PASSWORD): str,
     }
 )
+
+STEP_API_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_PROVIDER_KEY): str,
+        vol.Required(CONF_DEVICE_KEY): str,
+    }
+)
+
+
+async def _validate_api_credentials(
+    hass, provider_key: str, device_key: str
+) -> tuple[dict[str, Any], str]:
+    """Return (device dict, key permission) for a provider + device key pair.
+
+    Raises ``HydrosApiAuthError`` for bad/blocked credentials and
+    ``HydrosApiError`` for transport / server problems.
+    """
+    client = HydrosPublicApiClient(
+        async_get_clientsession(hass),
+        provider_key=provider_key.strip(),
+        device_key=device_key.strip(),
+    )
+    device = await client.async_get_device()
+    try:
+        writable = await client.async_probe_write_permission()
+    except HydrosApiError:
+        # A transient failure probing permission should not block setup; assume
+        # read-only and let the user widen later.
+        writable = False
+    permission = KEY_PERMISSION_WRITE if writable else KEY_PERMISSION_READ
+    return device, permission
 
 
 def _extract_thing_id(thing: dict[str, Any]) -> str | None:
@@ -173,13 +219,120 @@ class HydrosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._password: str | None = None
         self._region: str = DEFAULT_REGION
         self._collectives: dict[str, str] = {}
+        self._reauth_entry: ConfigEntry | None = None
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Pick an authentication method: official API (recommended) or legacy login."""
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["api", "legacy"],
+        )
+
+    async def async_step_api(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Official CoralVue HYDROS Public API: provider key + device key."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            provider_key = str(user_input[CONF_PROVIDER_KEY]).strip()
+            device_key = str(user_input[CONF_DEVICE_KEY]).strip()
+            try:
+                device, permission = await _validate_api_credentials(
+                    self.hass, provider_key, device_key
+                )
+            except HydrosApiAuthError:
+                errors["base"] = "invalid_auth"
+            except HydrosApiError as err:
+                _LOGGER.error("Hydros Public API error during config flow: %s", err)
+                errors["base"] = "cannot_connect"
+            except Exception:  # pragma: no cover - defensive
+                _LOGGER.exception("Unexpected Hydros Public API error during config flow")
+                errors["base"] = "unknown"
+            else:
+                device_id = str(device.get("deviceId") or "").strip()
+                if not device_id:
+                    errors["base"] = "unknown"
+                else:
+                    await self.async_set_unique_id(f"api:{device_id}")
+                    self._abort_if_unique_id_configured()
+                    title = str(device.get("friendlyName") or device_id)
+                    return self.async_create_entry(
+                        title=title,
+                        data={
+                            CONF_AUTH_MODE: AUTH_MODE_API,
+                            CONF_PROVIDER_KEY: provider_key,
+                            CONF_DEVICE_KEY: device_key,
+                            CONF_DEVICE_ID: device_id,
+                            CONF_KEY_PERMISSION: permission,
+                        },
+                    )
+
+        return self.async_show_form(
+            step_id="api",
+            data_schema=STEP_API_DATA_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        entry = self._reauth_entry
+        assert entry is not None
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            provider_key = str(user_input[CONF_PROVIDER_KEY]).strip()
+            device_key = str(user_input[CONF_DEVICE_KEY]).strip()
+            try:
+                device, permission = await _validate_api_credentials(
+                    self.hass, provider_key, device_key
+                )
+            except HydrosApiAuthError:
+                errors["base"] = "invalid_auth"
+            except HydrosApiError:
+                errors["base"] = "cannot_connect"
+            else:
+                device_id = str(device.get("deviceId") or entry.data.get(CONF_DEVICE_ID) or "")
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    data={
+                        **entry.data,
+                        CONF_AUTH_MODE: AUTH_MODE_API,
+                        CONF_PROVIDER_KEY: provider_key,
+                        CONF_DEVICE_KEY: device_key,
+                        CONF_DEVICE_ID: device_id,
+                        CONF_KEY_PERMISSION: permission,
+                    },
+                )
+                await self.hass.config_entries.async_reload(entry.entry_id)
+                return self.async_abort(reason="reauth_successful")
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_PROVIDER_KEY,
+                        default=entry.data.get(CONF_PROVIDER_KEY, ""),
+                    ): str,
+                    vol.Required(CONF_DEVICE_KEY): str,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_legacy(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Legacy path: HYDROS account email + password (deprecated)."""
         errors: dict[str, str] = {}
 
         if user_input is None:
             return self.async_show_form(
-                step_id="user",
+                step_id="legacy",
                 data_schema=STEP_USER_DATA_SCHEMA,
                 errors=errors,
             )
@@ -261,6 +414,7 @@ class HydrosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         title = self._build_entry_title(selected)
         data = {
+            CONF_AUTH_MODE: AUTH_MODE_LEGACY,
             CONF_USERNAME: self._username,
             CONF_PASSWORD: self._password,
             CONF_REGION: self._region,
@@ -293,11 +447,16 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
         self._pending_options: dict[str, Any] = {}
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        collective_ids = [
-            thing_id
-            for thing_id in self._config_entry.data.get(CONF_COLLECTIVES, [])
-            if isinstance(thing_id, str) and thing_id.strip()
-        ]
+        is_api_entry = self._config_entry.data.get(CONF_AUTH_MODE) == AUTH_MODE_API
+        if is_api_entry:
+            device_id = str(self._config_entry.data.get(CONF_DEVICE_ID, "")).strip()
+            collective_ids = [device_id] if device_id else []
+        else:
+            collective_ids = [
+                thing_id
+                for thing_id in self._config_entry.data.get(CONF_COLLECTIVES, [])
+                if isinstance(thing_id, str) and thing_id.strip()
+            ]
         collective_options = {thing_id: thing_id for thing_id in collective_ids}
         default_collective = str(
             self._config_entry.options.get(
@@ -328,7 +487,17 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
         )
 
         mode_options: list[str] = []
-        if default_collective:
+        if is_api_entry:
+            entry_data = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id)
+            hub = entry_data.get("hub") if isinstance(entry_data, dict) else None
+            getter = getattr(hub, "get_mode_options", None)
+            if callable(getter):
+                try:
+                    raw_modes: Any = getter()
+                    mode_options = [str(mode) for mode in (raw_modes or [])]
+                except Exception:  # noqa: BLE001
+                    mode_options = []
+        elif default_collective:
             try:
                 mode_options = await self.hass.async_add_executor_job(
                     _fetch_mode_options_sync,

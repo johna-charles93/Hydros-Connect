@@ -19,6 +19,38 @@ By default, this integration is monitoring-first. Remote control can be enabled 
 
 Example of good usage for this integration includes: long term metrics, triggering alerts, automation to non life supporting 3rd party devices (e.g light, smart switch).
 
+## Setup: choose an authentication method
+
+When you add the integration, Home Assistant asks how to connect:
+
+### Official HYDROS API (recommended)
+
+Uses CoralVue's official Public API. Nothing secret is stored in this repo — you
+bring your own keys.
+
+1. **Provider key** — request your own at
+   [coralvuehydros.com/api](https://www.coralvuehydros.com/api/#request-provider-key).
+   Choose the *unlisted* option for personal/scripted access. Using your own
+   provider key means other people's clients don't spend your rate-limit budget.
+2. **Device key** — in the HYDROS app, create a device key for the controller
+   you want in Home Assistant. Pick **Read & write** for remote control, or
+   **Read only** for monitoring. The integration detects which you gave it.
+3. Enter both keys. One device key = one device, so add the integration again
+   for each additional controller.
+
+Notes:
+- Data is polled about every 30 seconds (no real-time push). Entities go
+  unavailable if the device goes offline or polling stops.
+- The "Dosed Today" doser sensors are not available on this path (the API has no
+  dosing-log endpoint). Manual dosing uses the controller's native dose command.
+
+### HYDROS account login (deprecated)
+
+The original path: your HYDROS web-portal email and password. It relies on
+HYDROS' consumer backend and is expected to stop working as devices move to the
+official API. Existing setups keep working; new setups should use the official
+API.
+
 ## Jump To
 
 - [Quick Start (Alexa Mode Control in ~5 Minutes)](#quick-start-alexa-mode-control-in-5-minutes)

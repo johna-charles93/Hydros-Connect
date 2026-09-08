@@ -53,6 +53,7 @@ from .const import (
     DEFAULT_ENABLE_ALEXA_SCENES,
     DOMAIN,
 )
+from .hub_base import HydrosHubBase
 from .hydros_hub import HydrosHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -306,7 +307,7 @@ async def async_setup_entry(
     _LOGGER.debug("Setting up Hydros Alexa scenes for entry %s", entry.entry_id)
 
     entry_data = hass.data[DOMAIN][entry.entry_id]
-    if isinstance(entry_data, HydrosHub):
+    if isinstance(entry_data, HydrosHubBase):
         entry_data = {"hub": entry_data}
         hass.data[DOMAIN][entry.entry_id] = entry_data
 

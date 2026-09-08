@@ -33,6 +33,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_registry as er
 
 from .const import DEFAULT_AVAILABILITY_WINDOW_SECONDS, DOMAIN
+from .hub_base import HydrosHubBase
 from .hydros_hub import HydrosHub
 from .types import (
     is_variable_pump_output,
@@ -330,7 +331,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     entry_data = hass.data[DOMAIN][entry.entry_id]
-    if isinstance(entry_data, HydrosHub):
+    if isinstance(entry_data, HydrosHubBase):
         entry_data = {"hub": entry_data}
         hass.data[DOMAIN][entry.entry_id] = entry_data
 
@@ -538,23 +539,24 @@ class HydrosSensorManager:
                     capabilities = self._hub.get_output_capabilities(thing_id, output_key)
 
                     if capabilities.get("is_doser"):
-                        history_description = build_doser_today_description(
-                            HydrosSensorEntityDescription,
-                            entry=self._entry,
-                            thing_id=thing_id,
-                            output_key=output_key,
-                            output_meta=output_meta,
-                            device_name=device_name,
-                        )
-                        descriptions[history_description.key] = (
-                            history_description,
-                            DeviceInfo(
-                                identifiers={(DOMAIN, thing_id)},
-                                name=device_name,
-                                manufacturer=manufacturer,
-                                model=model,
-                            ),
-                        )
+                        if getattr(self._hub, "supports_dosing_history", True):
+                            history_description = build_doser_today_description(
+                                HydrosSensorEntityDescription,
+                                entry=self._entry,
+                                thing_id=thing_id,
+                                output_key=output_key,
+                                output_meta=output_meta,
+                                device_name=device_name,
+                            )
+                            descriptions[history_description.key] = (
+                                history_description,
+                                DeviceInfo(
+                                    identifiers={(DOMAIN, thing_id)},
+                                    name=device_name,
+                                    manufacturer=manufacturer,
+                                    model=model,
+                                ),
+                            )
 
                         reservoir_description = build_doser_reservoir_description(
                             HydrosSensorEntityDescription,

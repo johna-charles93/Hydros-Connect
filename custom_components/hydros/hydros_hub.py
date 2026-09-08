@@ -15,6 +15,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
+from .hub_base import HydrosHubBase
 from .types import get_output_capabilities
 
 from .const import (
@@ -73,7 +74,7 @@ def _extract_profile_thing_id(thing: dict[str, Any]) -> str | None:
     return None
 
 
-class HydrosHub:
+class HydrosHub(HydrosHubBase):
     """Coordinate Hydros data access for Home Assistant."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:

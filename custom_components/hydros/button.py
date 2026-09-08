@@ -25,6 +25,7 @@ from .const import (
     CONF_ENABLE_REMOTE_CONTROL,
     DOMAIN,
 )
+from .hub_base import HydrosHubBase
 from .hydros_hub import HydrosHub
 from .mode_utils import extract_mode_options
 
@@ -37,7 +38,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     entry_data = hass.data[DOMAIN][entry.entry_id]
-    if isinstance(entry_data, HydrosHub):
+    if isinstance(entry_data, HydrosHubBase):
         entry_data = {"hub": entry_data}
         hass.data[DOMAIN][entry.entry_id] = entry_data
 

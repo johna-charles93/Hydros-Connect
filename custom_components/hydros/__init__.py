@@ -10,6 +10,8 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
+    AUTH_MODE_API,
+    CONF_AUTH_MODE,
     CONF_ENABLE_REMOTE_CONTROL,
     DOMAIN,
     PLATFORMS,
@@ -18,6 +20,8 @@ from .const import (
     SERVICE_SET_OUTPUT_STATE,
     SERVICE_SET_PUMP_SPEED,
 )
+from .api_hub import HydrosApiHub
+from .hub_base import HydrosHubBase
 from .hydros_hub import HydrosHub
 
 ATTR_THING_ID = "thing_id"
@@ -38,13 +42,15 @@ def _is_remote_control_enabled(entry: ConfigEntry) -> bool:
     )
 
 
-def _find_hub_for_thing(hass: HomeAssistant, thing_id: str) -> tuple[ConfigEntry, HydrosHub] | None:
+def _find_hub_for_thing(
+    hass: HomeAssistant, thing_id: str
+) -> tuple[ConfigEntry, HydrosHubBase] | None:
     domain_data = hass.data.get(DOMAIN, {})
     for entry_id, entry_data in domain_data.items():
         if not isinstance(entry_data, dict):
             continue
         hub = entry_data.get("hub")
-        if not isinstance(hub, HydrosHub):
+        if not isinstance(hub, HydrosHubBase):
             continue
         if thing_id in hub.collective_ids:
             entry = hass.config_entries.async_get_entry(entry_id)
@@ -57,7 +63,7 @@ def _find_hub_for_thing(hass: HomeAssistant, thing_id: str) -> tuple[ConfigEntry
 def _find_hub_for_entity(
     hass: HomeAssistant,
     entity_id: str,
-) -> tuple[ConfigEntry, HydrosHub, str | None, str | None] | None:
+) -> tuple[ConfigEntry, HydrosHubBase, str | None, str | None] | None:
     registry = er.async_get(hass)
     registry_entry = registry.async_get(entity_id)
     if registry_entry is None or registry_entry.config_entry_id is None:
@@ -73,7 +79,7 @@ def _find_hub_for_entity(
         return None
 
     hub = entry_data.get("hub")
-    if not isinstance(hub, HydrosHub):
+    if not isinstance(hub, HydrosHubBase):
         return None
 
     state = hass.states.get(entity_id)
@@ -97,7 +103,7 @@ def _resolve_thing_and_output(
     call: ServiceCall,
     *,
     require_output: bool,
-) -> tuple[ConfigEntry, HydrosHub, str, str | None]:
+) -> tuple[ConfigEntry, HydrosHubBase, str, str | None]:
     entity_id = call.data.get(ATTR_ENTITY_ID)
     if isinstance(entity_id, str) and entity_id.strip():
         resolved = _find_hub_for_entity(hass, entity_id.strip())
@@ -223,7 +229,7 @@ def _ensure_services_registered(hass: HomeAssistant) -> None:
 def _maybe_unregister_services(hass: HomeAssistant) -> None:
     domain_data = hass.data.get(DOMAIN, {})
     for entry_data in domain_data.values():
-        if isinstance(entry_data, dict) and isinstance(entry_data.get("hub"), HydrosHub):
+        if isinstance(entry_data, dict) and isinstance(entry_data.get("hub"), HydrosHubBase):
             return
     for service_name in (
         SERVICE_SET_OUTPUT_STATE,
@@ -236,7 +242,10 @@ def _maybe_unregister_services(hass: HomeAssistant) -> None:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    hub = HydrosHub(hass, entry)
+    if entry.data.get(CONF_AUTH_MODE) == AUTH_MODE_API:
+        hub: HydrosHubBase = HydrosApiHub(hass, entry)
+    else:
+        hub = HydrosHub(hass, entry)
     await hub.async_setup()
 
     domain_data = hass.data.setdefault(DOMAIN, {})
@@ -289,7 +298,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     sensor_manager = None
     binary_manager = None
     scene_return_manager = None
-    hub: HydrosHub | None = None
+    hub: HydrosHubBase | None = None
     if entry_data:
         sensor_manager = entry_data.get("sensor_manager")
         binary_manager = entry_data.get("binary_sensor_manager")
