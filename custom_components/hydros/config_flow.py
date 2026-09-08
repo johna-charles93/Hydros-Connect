@@ -14,6 +14,7 @@ from .api import (
     HydrosApiAuthError,
     HydrosApiError,
     HydrosPublicApiClient,
+    device_identifier,
 )
 from .const import (
     AUTH_MODE_API,
@@ -254,9 +255,17 @@ class HydrosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
                 error_detail = str(err)
             else:
-                device_id = str(device.get("deviceId") or "").strip()
+                device_id = device_identifier(device)
                 if not device_id:
+                    _LOGGER.warning(
+                        "HYDROS /device response has no recognisable id; keys=%s",
+                        sorted(device),
+                    )
                     errors["base"] = "unknown"
+                    error_detail = (
+                        "The device response did not contain a device id "
+                        f"(fields: {', '.join(sorted(device)) or 'none'})."
+                    )
                 else:
                     await self.async_set_unique_id(f"api:{device_id}")
                     self._abort_if_unique_id_configured()
@@ -304,7 +313,7 @@ class HydrosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except HydrosApiError:
                 errors["base"] = "cannot_connect"
             else:
-                device_id = str(device.get("deviceId") or entry.data.get(CONF_DEVICE_ID) or "")
+                device_id = device_identifier(device) or str(entry.data.get(CONF_DEVICE_ID) or "")
                 self.hass.config_entries.async_update_entry(
                     entry,
                     data={

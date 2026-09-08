@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from custom_components.hydros.api import (
@@ -11,6 +13,9 @@ from custom_components.hydros.api import (
     HydrosApiStateUnavailable,
     HydrosPublicApiClient,
     HydrosSession,
+    _decode_body,
+    device_identifier,
+    extract_device,
 )
 from homeassistant.util import dt as dt_util
 
@@ -54,6 +59,54 @@ def _client(handler) -> tuple[HydrosPublicApiClient, _FakeSession]:
         base_url="https://api.example.test",
     )
     return client, session
+
+
+DEVICE = {"deviceId": "a0b7", "friendlyName": "Reef", "type": "X4"}
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        DEVICE,
+        [DEVICE],
+        {"device": DEVICE},
+        {"data": DEVICE},
+        {"devices": [DEVICE]},
+        {"items": [DEVICE]},
+        json.dumps(DEVICE),  # double-encoded string body
+        {"id": "a0b7", "friendlyName": "Reef"},  # alt id key
+        {"mac": "d0:ef:76", "friendlyName": "Reef"},
+    ],
+)
+def test_extract_device_tolerates_shapes(payload) -> None:
+    got = extract_device(payload)
+    assert isinstance(got, dict)
+    assert device_identifier(got) != ""
+
+
+@pytest.mark.parametrize("payload", [None, [], {}, {"foo": "bar"}, "not json", 42])
+def test_extract_device_rejects_non_devices(payload) -> None:
+    assert extract_device(payload) is None
+
+
+def test_decode_body_unwraps_double_encoded_json() -> None:
+    assert _decode_body(json.dumps(json.dumps({"a": 1}))) == {"a": 1}
+    assert _decode_body('{"a": 1}') == {"a": 1}
+    assert _decode_body("") is None
+    assert _decode_body("plain text") == "plain text"
+
+
+async def test_get_device_accepts_wrapped_list_payload() -> None:
+    client, _ = _client(lambda *_: (200, json.dumps({"devices": [DEVICE]})))
+    device = await client.async_get_device()
+    assert device_identifier(device) == "a0b7"
+
+
+async def test_get_device_raises_with_shape_hint_on_garbage() -> None:
+    client, _ = _client(lambda *_: (200, '{"totallyDifferent": true}'))
+    with pytest.raises(HydrosApiError) as excinfo:
+        await client.async_get_device()
+    assert "dict" in str(excinfo.value)
 
 
 async def test_get_device_sends_v1_auth_header() -> None:

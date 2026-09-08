@@ -43,6 +43,7 @@ from .api import (
     HydrosApiStateUnavailable,
     HydrosPublicApiClient,
     HydrosSession,
+    device_identifier,
 )
 from .const import (
     CONF_DEVICE_ID,
@@ -442,7 +443,7 @@ class HydrosApiHub(HydrosHubBase):
             "thingName": self._device_id,
             "thingType": self._device_meta.get("type"),
             "manufacturer": "Hydros",
-            "serialNum": self._device_meta.get("deviceId") or self._device_id,
+            "serialNum": device_identifier(self._device_meta) or self._device_id,
         }
 
     def get_mode_options(self) -> list[str]:

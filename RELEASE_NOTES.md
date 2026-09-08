@@ -4,6 +4,23 @@ Paste the relevant section into the GitHub Release body when tagging.
 
 ---
 
+## v0.6.3 — Tolerant /device parsing (2026-09-08)
+
+Fixes API setup failing with **"Unexpected /device payload"** even though the
+request reached CoralVue and came back.
+
+- `GET /api/v1/device` is now parsed leniently: bare object, single-element
+  list, `{"device": …}` / `{"devices": […]}` wrappers, and double-encoded JSON
+  string bodies all work. The device id is read from any of `deviceId`,
+  `device_id`, `id`, `mac`, `macAddress`, `thingName`.
+- The same unwrapping applies to the state / overrides / override-metadata
+  responses.
+- If a payload still isn't recognised, its shape is logged and shown in the
+  setup form — please attach that to a report on
+  [issue #6](https://github.com/johna-charles93/Hydros-Connect/issues/6).
+
+---
+
 ## v0.6.2 — API setup diagnostics (2026-09-08)
 
 - The **Official HYDROS API** setup form now shows the real error (HTTP status /

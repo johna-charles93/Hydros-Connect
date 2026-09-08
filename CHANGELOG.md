@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.3 - 2026-09-08
+
+### Fixed
+- API setup failing with **"Unexpected /device payload"**. `GET /api/v1/device` responses are now parsed tolerantly: a bare object, a single-element list, common `{"device": …}` / `{"devices": […]}` wrappers, and double-encoded JSON string bodies are all accepted, and the device id is read from any of `deviceId` / `device_id` / `id` / `mac` / `macAddress` / `thingName`. The same unwrapping is applied to the state, overrides, and override-metadata responses. If a payload still isn't recognised, its shape (type + keys) is logged and shown in the setup form so it can be reported.
+
 ## 0.6.2 - 2026-09-08
 
 ### Changed

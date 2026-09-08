@@ -184,9 +184,17 @@ class HydrosPublicApiClient:
     async def async_get_device(self) -> dict[str, Any]:
         """``GET /api/v1/device`` — the single device bound to the device key."""
         result = await self._request("GET", "/api/v1/device")
-        if not isinstance(result, dict):
-            raise HydrosApiError("Unexpected /device payload")
-        return result
+        device = extract_device(result)
+        if device is None:
+            _LOGGER.warning(
+                "Unrecognised /api/v1/device payload (%s): %s",
+                type(result).__name__,
+                _summarise(result),
+            )
+            raise HydrosApiError(
+                f"Unexpected /device payload ({type(result).__name__}); see the log for its shape"
+            )
+        return device
 
     # -- polling session + state --------------------------------------
 
@@ -217,25 +225,43 @@ class HydrosPublicApiClient:
             session.poll_url,
             authorization=f"Bearer {session.poll_token}",
         )
-        if not isinstance(result, dict):
+        state = _unwrap_dict(result)
+        if state is None:
+            _LOGGER.warning(
+                "Unrecognised /device/state payload (%s): %s",
+                type(result).__name__,
+                _summarise(result),
+            )
             raise HydrosApiError("Unexpected /device/state payload")
-        return result
+        return state
 
     # -- overrides ----------------------------------------------------
 
     async def async_get_override_metadata(self) -> list[dict[str, Any]]:
         """``GET /api/v1/device/overrides/metadata`` — overridable outputs + the ``mode`` entry."""
         result = await self._request("GET", "/api/v1/device/overrides/metadata")
-        if not isinstance(result, list):
+        entries = _unwrap_list(result)
+        if entries is None:
+            _LOGGER.warning(
+                "Unrecognised override metadata payload (%s): %s",
+                type(result).__name__,
+                _summarise(result),
+            )
             raise HydrosApiError("Unexpected override metadata payload")
-        return [entry for entry in result if isinstance(entry, dict)]
+        return [entry for entry in entries if isinstance(entry, dict)]
 
     async def async_get_overrides(self) -> dict[str, Any]:
         """``GET /api/v1/device/overrides`` — current override doc + delivery status."""
         result = await self._request("GET", "/api/v1/device/overrides")
-        if not isinstance(result, dict):
+        overrides = _unwrap_dict(result)
+        if overrides is None:
+            _LOGGER.warning(
+                "Unrecognised overrides payload (%s): %s",
+                type(result).__name__,
+                _summarise(result),
+            )
             raise HydrosApiError("Unexpected overrides payload")
-        return result
+        return overrides
 
     async def async_put_overrides(
         self, mapping: dict[str, Any], *, receipt: bool = False
@@ -312,9 +338,116 @@ def _decode_body(text: str) -> Any:
     if not text:
         return None
     try:
-        return json.loads(text)
+        data = json.loads(text)
     except ValueError:
         return text
+    # Some API Gateway / Lambda-proxy responses double-encode the body as a
+    # JSON string ("\"{\\\"deviceId\\\": ...}\""). Unwrap one extra level.
+    if isinstance(data, str):
+        try:
+            return json.loads(data)
+        except ValueError:
+            return data
+    return data
+
+
+def _summarise(payload: Any, limit: int = 300) -> str:
+    """A short, safe description of an unexpected payload for logging."""
+    if isinstance(payload, dict):
+        return f"dict keys={sorted(payload)[:20]}"
+    if isinstance(payload, list):
+        head = payload[0] if payload else None
+        head_keys = sorted(head)[:20] if isinstance(head, dict) else type(head).__name__
+        return f"list len={len(payload)} first={head_keys}"
+    text = repr(payload)
+    return text if len(text) <= limit else text[:limit] + "…"
+
+
+_DEVICE_WRAPPER_KEYS = ("device", "data", "result", "body", "Item", "payload")
+_DEVICE_LIST_KEYS = ("devices", "items", "Items", "results")
+_DEVICE_ID_KEYS = ("deviceId", "device_id", "id", "mac", "macAddress", "thingName")
+
+
+def extract_device(payload: Any) -> dict[str, Any] | None:
+    """Best-effort pull of a single device object from varied response shapes.
+
+    Accepts the documented bare object, a single-element list, and common
+    ``{"device": {...}}`` / ``{"devices": [...]}`` wrappers. Returns ``None`` if
+    nothing device-shaped is found.
+    """
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except ValueError:
+            return None
+
+    if isinstance(payload, dict):
+        if any(key in payload for key in _DEVICE_ID_KEYS) or "friendlyName" in payload:
+            return payload
+        for key in _DEVICE_WRAPPER_KEYS:
+            if key in payload:
+                found = extract_device(payload[key])
+                if found is not None:
+                    return found
+        for key in _DEVICE_LIST_KEYS:
+            if isinstance(payload.get(key), list):
+                for item in payload[key]:
+                    found = extract_device(item)
+                    if found is not None:
+                        return found
+        return None
+
+    if isinstance(payload, list):
+        for item in payload:
+            found = extract_device(item)
+            if found is not None:
+                return found
+
+    return None
+
+
+_BODY_WRAPPER_KEYS = ("data", "result", "body", "payload", "Item")
+
+
+def _unwrap_dict(payload: Any) -> dict[str, Any] | None:
+    """Return a dict payload, unwrapping a single ``{"data": {...}}`` layer."""
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except ValueError:
+            return None
+    if isinstance(payload, dict):
+        if any(k in payload for k in _BODY_WRAPPER_KEYS) and len(payload) == 1:
+            inner = next(iter(payload.values()))
+            if isinstance(inner, dict):
+                return inner
+        return payload
+    return None
+
+
+def _unwrap_list(payload: Any) -> list[Any] | None:
+    """Return a list payload, unwrapping a single ``{"items": [...]}`` layer."""
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except ValueError:
+            return None
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("items", "Items", "results", "data", "metadata", "entries"):
+            if isinstance(payload.get(key), list):
+                return payload[key]
+    return None
+
+
+def device_identifier(device: dict[str, Any]) -> str:
+    """Return the best available stable identifier for a device object."""
+    for key in _DEVICE_ID_KEYS:
+        value = device.get(key)
+        if isinstance(value, (str, int)) and str(value).strip():
+            return str(value).strip()
+    return ""
 
 
 def _error_message(body: Any) -> str | None:
