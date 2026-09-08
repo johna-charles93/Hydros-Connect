@@ -1,0 +1,30 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # pytest-homeassistant-custom-component pulls a compatible Home
+          # Assistant + pytest-asyncio/aiohttp. pyhydros is the legacy-path
+          # runtime dependency from manifest.json.
+          pip install pytest-homeassistant-custom-component pyhydros
+
+      - name: Run tests
+        run: pytest -q

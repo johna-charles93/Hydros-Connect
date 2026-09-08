@@ -5,7 +5,7 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/johna-charles93/Hydros-Connect",
-  "iot_class": "cloud_push",
+  "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/johna-charles93/Hydros-Connect/issues",
   "requirements": ["pyhydros==0.4.1"],
   "version": "0.6.1"
