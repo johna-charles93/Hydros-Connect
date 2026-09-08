@@ -4,6 +4,23 @@ Paste the relevant section into the GitHub Release body when tagging.
 
 ---
 
+## v0.6.5 — Fix session-start retry storm (2026-09-08)
+
+If setup couldn't open a state session, the poll loop kept asking for a new one
+every ~30 seconds — but `POST /device/state/session` is capped at **5 per hour
+per device**, so it just kept getting `429` forever.
+
+Now: after a failed session start the integration waits at least **15 minutes**
+before trying again (doubling to a 60-minute ceiling on repeated rate-limit
+responses), and skips the poll entirely — no HTTP call — while it's waiting.
+Override-metadata fetches get a 5-minute retry floor on failure too.
+
+If your entry hit this: update to v0.6.5, then **wait ~1 hour** for the session
+budget to refill before re-enabling / reloading it, so the first attempt lands
+clean.
+
+---
+
 ## v0.6.4 — Degrade instead of stall; log API errors (2026-09-08)
 
 For the API path, when `GET /device` works but a later setup call fails:

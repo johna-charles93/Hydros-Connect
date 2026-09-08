@@ -149,6 +149,39 @@ async def test_api_entry_loads_when_backend_step_fails(
     assert "Invalid thing name" in (health["last_error"] or "")
 
 
+async def test_session_start_backs_off_after_429(
+    hass: HomeAssistant, api_entry: MockConfigEntry
+) -> None:
+    """The 5/hour session-start cap must not be re-hit every poll tick."""
+    from custom_components.hydros.api import HydrosApiRateLimitError
+
+    client = _mock_api_client()
+    client.async_start_session.side_effect = HydrosApiRateLimitError(
+        "Rate limit exceeded: too many session starts for this device", status=429
+    )
+
+    with patch(
+        "custom_components.hydros.api_hub.HydrosPublicApiClient", return_value=client
+    ):
+        assert await hass.config_entries.async_setup(api_entry.entry_id)
+        await hass.async_block_till_done()
+        hub = hass.data[DOMAIN][api_entry.entry_id]["hub"]
+
+        assert client.async_start_session.await_count == 1  # setup tried once
+        assert hub._session_start_allowed() is False
+
+        # Next poll ticks must not touch the session endpoint.
+        await hub._async_poll()
+        await hub._async_poll()
+        assert client.async_start_session.await_count == 1
+
+        # Once the backoff window elapses, it tries again exactly once.
+        hub._session_attempt_at = dt_util.utcnow() - timedelta(hours=2)
+        assert hub._session_start_allowed() is True
+        await hub._async_poll()
+        assert client.async_start_session.await_count == 2
+
+
 async def test_api_entry_not_ready_when_get_device_fails(
     hass: HomeAssistant, api_entry: MockConfigEntry
 ) -> None:

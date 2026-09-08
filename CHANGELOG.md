@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.5 - 2026-09-08
+
+### Fixed
+- **Retry storm against `POST /device/state/session`** (`HTTP 429: too many session starts for this device`). The poll loop was re-requesting a session every ~30s against a **5/hour/device** cap, so it never cleared. Session start now backs off at least 15 minutes after a failure, doubling up to 60 minutes on repeated rate-limit responses, and the poll loop skips entirely (no HTTP call) while inside the backoff window. Override-metadata fetches also get a 5-minute retry floor after a failure.
+
 ## 0.6.4 - 2026-09-08
 
 ### Changed

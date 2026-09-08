@@ -33,8 +33,15 @@ HYDROS_API_BASE_URL = "https://api.coralvuehydros.com"
 DEFAULT_API_POLL_INTERVAL = 30
 # Session poll tokens live 6h; renew with margin to spare.
 DEFAULT_API_SESSION_RENEW_MARGIN = 1800  # 30 minutes
+# POST /device/state/session is capped at 5/hour/device. When a session start
+# fails, wait at least this long before trying again, doubling up to the max on
+# repeated rate-limit responses.
+DEFAULT_API_SESSION_RETRY_BASE = 900  # 15 minutes -> <= 4 attempts/hour
+DEFAULT_API_SESSION_RETRY_MAX = 3600  # 1 hour
 # Override metadata only changes on device reconfiguration; cache aggressively.
 DEFAULT_API_METADATA_TTL = 900  # 15 minutes
+# After a metadata fetch fails, wait this long before retrying it.
+DEFAULT_API_METADATA_RETRY = 300  # 5 minutes
 # HTTP timeout for a single Public API request.
 DEFAULT_API_REQUEST_TIMEOUT = 30
 CONF_ENABLE_REMOTE_CONTROL = "enable_remote_control"

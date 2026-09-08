@@ -50,9 +50,12 @@ from .const import (
     CONF_DEVICE_KEY,
     CONF_KEY_PERMISSION,
     CONF_PROVIDER_KEY,
+    DEFAULT_API_METADATA_RETRY,
     DEFAULT_API_METADATA_TTL,
     DEFAULT_API_POLL_INTERVAL,
     DEFAULT_API_SESSION_RENEW_MARGIN,
+    DEFAULT_API_SESSION_RETRY_BASE,
+    DEFAULT_API_SESSION_RETRY_MAX,
     DEFAULT_COMMAND_CONFIRM_TIMEOUT,
     DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS,
     DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS,
@@ -129,7 +132,12 @@ class HydrosApiHub(HydrosHubBase):
         self._override_meta: dict[str, _OverrideMeta] = {}  # by output name
         self._mode_commands: list[str] = []
         self._metadata_fetched_at: datetime | None = None
+        self._metadata_attempt_at: datetime | None = None
         self._metadata_dirty = False
+
+        # Backoff for POST /device/state/session (5/hour/device cap).
+        self._session_attempt_at: datetime | None = None
+        self._session_retry_after: float = DEFAULT_API_SESSION_RETRY_BASE
 
         self._synth_config: dict[str, Any] = {}
         self._synth_keys: tuple[frozenset[str], frozenset[str]] = (frozenset(), frozenset())
@@ -219,22 +227,45 @@ class HydrosApiHub(HydrosHubBase):
     async def _handle_interval(self, _now: datetime) -> None:
         await self._async_poll()
 
+    def _session_start_allowed(self) -> bool:
+        """False while inside the session-start backoff window."""
+        if self._session_attempt_at is None:
+            return True
+        elapsed = (dt_util.utcnow() - self._session_attempt_at).total_seconds()
+        return elapsed >= self._session_retry_after
+
     async def _async_start_session(self) -> None:
         assert self._client is not None
+        self._session_attempt_at = dt_util.utcnow()
         try:
             self._session = await self._client.async_start_session()
         except HydrosApiRateLimitError:
+            self._session_retry_after = min(
+                self._session_retry_after * 2, DEFAULT_API_SESSION_RETRY_MAX
+            )
             if self._session is not None and not self._session.needs_renew(0):
                 _LOGGER.warning(
-                    "Hydros session-start rate limited; reusing existing session for %s",
+                    "Hydros session-start rate limited for %s; keeping current "
+                    "session, next start attempt in ~%.0f min",
                     self._device_id,
+                    self._session_retry_after / 60,
                 )
                 return
+            _LOGGER.warning(
+                "Hydros session-start rate limited for %s; backing off ~%.0f min "
+                "before retrying (POST /device/state/session is capped at 5/hour)",
+                self._device_id,
+                self._session_retry_after / 60,
+            )
             raise
-
-    async def _async_ensure_session(self) -> None:
-        if self._session is None or self._session.needs_renew(DEFAULT_API_SESSION_RENEW_MARGIN):
-            await self._async_start_session()
+        except HydrosApiError:
+            # Non-rate-limit failure (e.g. a 5xx). Use the base cadence so we
+            # don't hammer, but don't grow the window.
+            self._session_retry_after = DEFAULT_API_SESSION_RETRY_BASE
+            raise
+        else:
+            self._session_retry_after = DEFAULT_API_SESSION_RETRY_BASE
+            self._session_attempt_at = None
 
     async def _async_poll_once(self) -> None:
         """First poll during setup."""
@@ -252,16 +283,43 @@ class HydrosApiHub(HydrosHubBase):
         if self._client is None:
             return
         async with self._poll_lock:
+            # Override metadata (best effort, own backoff on failure).
+            if self._metadata_dirty or self._metadata_stale():
+                if self._metadata_retry_allowed():
+                    try:
+                        await self._async_refresh_metadata()
+                    except HydrosApiError as err:
+                        self._metadata_attempt_at = dt_util.utcnow()
+                        self._note_error(err)
+
+            # Session — respect the 5/hour session-start budget.
+            need_session = self._session is None or self._session.needs_renew(
+                DEFAULT_API_SESSION_RENEW_MARGIN
+            )
+            if need_session:
+                if self._session is None and not self._session_start_allowed():
+                    return  # inside backoff window; try again next tick
+                try:
+                    await self._async_start_session()
+                except HydrosApiAuthError as err:
+                    self._note_error(err)
+                    self._entry.async_start_reauth(self._hass)
+                    return
+                except HydrosApiError as err:
+                    self._note_error(err)
+                    return
+            if self._session is None:
+                return
+
+            # State poll.
             try:
-                if self._metadata_dirty or self._metadata_stale():
-                    await self._async_refresh_metadata()
-                await self._async_ensure_session()
-                assert self._session is not None
                 try:
                     state = await self._client.async_poll_state(self._session)
                 except HydrosApiAuthError:
                     # Poll token expired/rotated — re-mint once and retry.
                     await self._async_start_session()
+                    if self._session is None:
+                        return
                     state = await self._client.async_poll_state(self._session)
             except HydrosApiStateUnavailable as err:
                 self._device_offline = True
@@ -272,7 +330,6 @@ class HydrosApiHub(HydrosHubBase):
                 self._note_error(err)
                 return
             except HydrosApiAuthError as err:
-                # Persistent auth failure — surface as reauth.
                 self._note_error(err)
                 self._entry.async_start_reauth(self._hass)
                 return
@@ -292,6 +349,12 @@ class HydrosApiHub(HydrosHubBase):
             return True
         age = (dt_util.utcnow() - self._metadata_fetched_at).total_seconds()
         return age > DEFAULT_API_METADATA_TTL
+
+    def _metadata_retry_allowed(self) -> bool:
+        if self._metadata_attempt_at is None:
+            return True
+        elapsed = (dt_util.utcnow() - self._metadata_attempt_at).total_seconds()
+        return elapsed >= DEFAULT_API_METADATA_RETRY
 
     async def _async_refresh_metadata(self) -> None:
         assert self._client is not None
@@ -339,6 +402,7 @@ class HydrosApiHub(HydrosHubBase):
         self._override_meta = by_name
         self._mode_commands = mode_commands
         self._metadata_fetched_at = dt_util.utcnow()
+        self._metadata_attempt_at = None
         self._metadata_dirty = False
 
     # -- state bookkeeping ------------------------------------------
