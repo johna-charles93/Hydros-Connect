@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.4 - 2026-09-08
+
+### Changed
+- API path: if `GET /device` succeeds but a follow-up setup call (override metadata, state session, or the first poll) fails, the config entry now **loads in a degraded state** and keeps retrying in the background instead of getting stuck on "Failed setup, will retry". Entities are created and show unavailable until data arrives; the API Status sensor reports `degraded` with the error.
+- API client: every request is logged at debug (`method`, path, HTTP status), and any non-success response is logged at **warning** with the status and the first 400 characters of the response body — so a server-side error like `Invalid thing name specified in request` is visible and reportable.
+
 ## 0.6.3 - 2026-09-08
 
 ### Fixed

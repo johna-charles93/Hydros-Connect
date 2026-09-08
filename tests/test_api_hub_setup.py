@@ -122,6 +122,52 @@ async def test_api_entry_sets_up_and_builds_entities(
     await hass.async_block_till_done()
 
 
+async def test_api_entry_loads_when_backend_step_fails(
+    hass: HomeAssistant, api_entry: MockConfigEntry
+) -> None:
+    """A 5xx on metadata/session/poll must not block the whole entry."""
+    from custom_components.hydros.api import HydrosApiError
+
+    client = _mock_api_client()
+    err = HydrosApiError(
+        "Internal server error: Invalid thing name specified in request", status=500
+    )
+    client.async_get_override_metadata.side_effect = err
+    client.async_start_session.side_effect = err
+    client.async_poll_state.side_effect = err
+
+    with patch(
+        "custom_components.hydros.api_hub.HydrosPublicApiClient", return_value=client
+    ):
+        # GET /device still succeeds, so the entry should load (degraded).
+        assert await hass.config_entries.async_setup(api_entry.entry_id)
+        await hass.async_block_till_done()
+
+    hub = hass.data[DOMAIN][api_entry.entry_id]["hub"]
+    health = hub.get_api_health()
+    assert health["status"] == "degraded"
+    assert "Invalid thing name" in (health["last_error"] or "")
+
+
+async def test_api_entry_not_ready_when_get_device_fails(
+    hass: HomeAssistant, api_entry: MockConfigEntry
+) -> None:
+    from homeassistant.config_entries import ConfigEntryState
+
+    from custom_components.hydros.api import HydrosApiError
+
+    client = _mock_api_client()
+    client.async_get_device.side_effect = HydrosApiError("gateway down", status=500)
+
+    with patch(
+        "custom_components.hydros.api_hub.HydrosPublicApiClient", return_value=client
+    ):
+        await hass.config_entries.async_setup(api_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert api_entry.state is ConfigEntryState.SETUP_RETRY
+
+
 async def test_api_hub_change_mode_calls_command(
     hass: HomeAssistant, api_entry: MockConfigEntry
 ) -> None:

@@ -137,8 +137,10 @@ class HydrosPublicApiClient:
         # retried automatically.
         attempts = 2 if method.upper() == "GET" else 1
 
+        log_path = path.split("?", 1)[0] if path.startswith("http") else path
         last_transport_error: Exception | None = None
         for attempt in range(attempts):
+            _LOGGER.debug("HYDROS API -> %s %s (attempt %d)", method, log_path, attempt + 1)
             try:
                 async with self._session.request(
                     method,
@@ -154,9 +156,12 @@ class HydrosPublicApiClient:
                 last_transport_error = HydrosApiError(
                     f"HTTP transport error calling {method} {path}: {err}"
                 )
+                _LOGGER.debug("HYDROS API <- %s %s transport error: %s", method, log_path, err)
             except asyncio.TimeoutError as err:  # noqa: F841
                 last_transport_error = HydrosApiError(f"Timed out calling {method} {path}")
+                _LOGGER.debug("HYDROS API <- %s %s timed out", method, log_path)
             else:
+                _LOGGER.debug("HYDROS API <- %s %s HTTP %s", method, log_path, status)
                 if status in expected:
                     return _decode_body(text)
                 if status in (502, 503, 504) and attempt + 1 < attempts:
@@ -165,6 +170,13 @@ class HydrosPublicApiClient:
 
                 body = _decode_body(text)
                 message = _error_message(body) or f"{method} {path} returned HTTP {status}"
+                _LOGGER.warning(
+                    "HYDROS API %s %s -> HTTP %s: %s",
+                    method,
+                    log_path,
+                    status,
+                    (text or "").strip()[:400],
+                )
                 if status in (401, 403):
                     raise HydrosApiAuthError(message, status=status)
                 if status == 429:

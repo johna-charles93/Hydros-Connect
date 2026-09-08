@@ -158,15 +158,41 @@ class HydrosApiHub(HydrosHubBase):
             device_key=self._device_key,
         )
 
+        # Identity is required — without it the device can't be set up at all.
         try:
             self._device_meta = await self._client.async_get_device()
-            await self._async_refresh_metadata()
-            await self._async_start_session()
-            await self._async_poll_once()
         except HydrosApiAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except HydrosApiError as err:
-            raise ConfigEntryNotReady(str(err)) from err
+            raise ConfigEntryNotReady(f"HYDROS API GET /device failed: {err}") from err
+
+        _LOGGER.debug(
+            "HYDROS device for %s: keys=%s", self._device_id, sorted(self._device_meta)
+        )
+
+        # Metadata / session / first poll are best-effort: bring the entry up
+        # even if they fail so the entities exist (unavailable) and the poll
+        # loop can keep retrying. A stuck ConfigEntryNotReady here would hide a
+        # non-transient server-side problem behind an endless retry with no
+        # visible detail.
+        for label, step in (
+            ("override metadata", self._async_refresh_metadata),
+            ("state session", self._async_start_session),
+            ("initial state poll", self._async_poll_once),
+        ):
+            try:
+                await step()
+            except HydrosApiAuthError as err:
+                raise ConfigEntryAuthFailed(str(err)) from err
+            except HydrosApiError as err:
+                _LOGGER.warning(
+                    "HYDROS API setup step '%s' failed for %s: %s — the "
+                    "integration will load and keep retrying in the background",
+                    label,
+                    self._device_id,
+                    err,
+                )
+                self._note_error(err)
 
         self._build_synth_config()
 
@@ -211,8 +237,9 @@ class HydrosApiHub(HydrosHubBase):
             await self._async_start_session()
 
     async def _async_poll_once(self) -> None:
-        """First poll during setup — let errors propagate for ConfigEntryNotReady."""
-        assert self._client is not None and self._session is not None
+        """First poll during setup."""
+        if self._client is None or self._session is None:
+            return
         try:
             state = await self._client.async_poll_state(self._session)
         except HydrosApiStateUnavailable:

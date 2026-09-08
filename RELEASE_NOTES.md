@@ -4,6 +4,24 @@ Paste the relevant section into the GitHub Release body when tagging.
 
 ---
 
+## v0.6.4 — Degrade instead of stall; log API errors (2026-09-08)
+
+For the API path, when `GET /device` works but a later setup call fails:
+
+- the config entry **loads anyway** (entities unavailable) and retries in the
+  background, instead of sitting on "Failed setup, will retry" with no detail;
+- every API call is logged at debug, and any error response is logged at
+  **warning** with the HTTP status and response body.
+
+If you see `Invalid thing name specified in request` (or any other API error)
+during setup: the warning log now names the exact endpoint and status. That
+message comes from CoralVue's backend — please capture the log line and add it
+to [issue #6](https://github.com/johna-charles93/Hydros-Connect/issues/6) and a
+CoralVue support ticket. A collective whose name contains a space is a likely
+trigger.
+
+---
+
 ## v0.6.3 — Tolerant /device parsing (2026-09-08)
 
 Fixes API setup failing with **"Unexpected /device payload"** even though the
