@@ -12,7 +12,7 @@
       },
       "api": {
         "title": "HYDROS Public API",
-        "description": "Enter a provider key and a device key.\n\n1. Request your own provider key at coralvuehydros.com/api (use the \"unlisted\" option for personal/scripted access).\n2. In the HYDROS app, create a device key for the device you want to expose. Choose \"Read & write\" if you want remote control, or \"Read only\" for monitoring.\n\nOne device key = one device, so add the integration again for each additional controller.",
+        "description": "Enter a provider key and a device key.\n\n1. Request your own provider key at coralvuehydros.com/api (use the \"unlisted\" option for personal/scripted access).\n2. In the HYDROS app, create a device key for the device you want to expose. Choose \"Read & write\" if you want remote control, or \"Read only\" for monitoring.\n\nOne device key = one device, so add the integration again for each additional controller.\n\n{error_detail}",
         "data": {
           "provider_key": "Provider key",
           "device_key": "Device key"
@@ -36,8 +36,9 @@
       }
     },
     "error": {
-      "invalid_auth": "The provided credentials are invalid.",
-      "cannot_connect": "Unable to reach the Hydros service.",
+      "invalid_auth": "The provider key or device key was rejected. Check both keys, and confirm CoralVue has activated your provider key.",
+      "cannot_connect": "Unable to reach the HYDROS API. Check this machine's internet connection and try again.",
+      "server_error": "The HYDROS API returned an error. This often means the provider key is not active yet — check with CoralVue. Details are shown above and in the logs.",
       "unknown": "Unexpected error occurred.",
       "select_collective": "Select at least one collective."
     },

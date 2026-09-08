@@ -4,6 +4,22 @@ Paste the relevant section into the GitHub Release body when tagging.
 
 ---
 
+## v0.6.2 — API setup diagnostics (2026-09-08)
+
+- The **Official HYDROS API** setup form now shows the real error (HTTP status /
+  message) instead of a bare "Unable to reach the Hydros service", and tells a
+  server-side error (HTTP 5xx — commonly an **inactive provider key**) apart
+  from an actual network failure.
+- The API client retries a `GET` once on a transient gateway error
+  (HTTP 502/503/504 or a dropped connection).
+
+If you hit "Unable to reach the HYDROS API" / a server error: check
+**Settings → System → Logs** for a `custom_components.hydros` line with the HTTP
+status, and confirm with CoralVue that your provider key is active — brand-new
+keys can take a bit to propagate.
+
+---
+
 ## v0.6.1 — Bug fixes (2026-09-08)
 
 Small follow-up to v0.6.0.

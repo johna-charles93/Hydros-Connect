@@ -119,6 +119,30 @@ async def test_api_invalid_auth_shows_error(hass: HomeAssistant) -> None:
     assert result["errors"] == {"base": "invalid_auth"}
 
 
+async def test_api_server_error_maps_to_server_error(hass: HomeAssistant) -> None:
+    from custom_components.hydros.api import HydrosApiError
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "api"}
+    )
+
+    boom = AsyncMock()
+    boom.async_get_device.side_effect = HydrosApiError("gateway blew up", status=500)
+    with patch(
+        "custom_components.hydros.config_flow.HydrosPublicApiClient", return_value=boom
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_PROVIDER_KEY: "x", CONF_DEVICE_KEY: "y"},
+        )
+    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["errors"] == {"base": "server_error"}
+    assert "gateway blew up" in result["description_placeholders"]["error_detail"]
+
+
 async def test_api_duplicate_device_aborts(hass: HomeAssistant) -> None:
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 

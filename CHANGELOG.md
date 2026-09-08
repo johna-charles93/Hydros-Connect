@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.2 - 2026-09-08
+
+### Changed
+- API config flow: the setup form now shows the underlying error detail (HTTP status / message) instead of only "Unable to reach the Hydros service", and distinguishes a server-side error (HTTP 5xx — often an inactive provider key) from a real connectivity failure.
+- API client: `GET` requests retry once on a transient gateway failure (HTTP 502/503/504 or a dropped connection); writes are never retried automatically.
+
 ## 0.6.1 - 2026-09-08
 
 ### Fixed

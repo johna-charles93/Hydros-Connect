@@ -125,6 +125,39 @@ async def test_poll_state_uses_bearer_token_and_maps_404() -> None:
         await offline_client.async_poll_state(session)
 
 
+async def test_get_retries_once_on_gateway_5xx_then_succeeds() -> None:
+    calls = {"n": 0}
+
+    def handler(*_):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return (503, '{"message": "Service Unavailable"}')
+        return (200, '{"deviceId": "a0b7", "friendlyName": "Reef", "type": "X4"}')
+
+    client, session = _client(handler)
+    device = await client.async_get_device()
+
+    assert device["deviceId"] == "a0b7"
+    assert len(session.calls) == 2  # retried once
+
+
+async def test_get_gives_up_after_retry_and_reports_status() -> None:
+    client, session = _client(lambda *_: (502, '{"message": "Bad Gateway"}'))
+    with pytest.raises(HydrosApiError) as excinfo:
+        await client.async_get_device()
+
+    assert excinfo.value.status == 502
+    assert len(session.calls) == 2
+
+
+async def test_write_requests_are_not_retried() -> None:
+    client, session = _client(lambda *_: (503, '{"message": "Service Unavailable"}'))
+    with pytest.raises(HydrosApiError):
+        await client.async_put_overrides({"k": 1})
+
+    assert len(session.calls) == 1  # no retry on PUT
+
+
 async def test_send_command_body_shapes() -> None:
     client, session = _client(lambda *_: (202, '{"command": "Feeding", "published": true, "deviceConnected": true}'))
 

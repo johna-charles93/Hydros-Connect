@@ -132,41 +132,52 @@ class HydrosPublicApiClient:
     ) -> Any:
         url = path if path.startswith("http") else f"{self._base_url}{path}"
         headers = {"Authorization": authorization or self._auth_header()}
+        # Retry a GET once on a transient gateway failure (cold Lambda authorizer,
+        # CloudFront/API-Gateway 5xx, a dropped connection). Writes are never
+        # retried automatically.
+        attempts = 2 if method.upper() == "GET" else 1
 
-        try:
-            async with self._session.request(
-                method,
-                url,
-                params=params,
-                json=json_body,
-                headers=headers,
-                timeout=self._timeout,
-            ) as resp:
-                status = resp.status
-                text = await resp.text()
-        except aiohttp.ClientError as err:
-            raise HydrosApiError(f"HTTP transport error calling {method} {path}: {err}") from err
-        except asyncio.TimeoutError as err:
-            raise HydrosApiError(f"Timed out calling {method} {path}") from err
-
-        body: Any = None
-        if text:
+        last_transport_error: Exception | None = None
+        for attempt in range(attempts):
             try:
-                body = json.loads(text)
-            except ValueError:
-                body = text
+                async with self._session.request(
+                    method,
+                    url,
+                    params=params,
+                    json=json_body,
+                    headers=headers,
+                    timeout=self._timeout,
+                ) as resp:
+                    status = resp.status
+                    text = await resp.text()
+            except aiohttp.ClientError as err:
+                last_transport_error = HydrosApiError(
+                    f"HTTP transport error calling {method} {path}: {err}"
+                )
+            except asyncio.TimeoutError as err:  # noqa: F841
+                last_transport_error = HydrosApiError(f"Timed out calling {method} {path}")
+            else:
+                if status in expected:
+                    return _decode_body(text)
+                if status in (502, 503, 504) and attempt + 1 < attempts:
+                    await asyncio.sleep(1.0)
+                    continue
 
-        if status in expected:
-            return body
+                body = _decode_body(text)
+                message = _error_message(body) or f"{method} {path} returned HTTP {status}"
+                if status in (401, 403):
+                    raise HydrosApiAuthError(message, status=status)
+                if status == 429:
+                    raise HydrosApiRateLimitError(message, status=status)
+                if status == 404:
+                    raise HydrosApiStateUnavailable(message, status=status)
+                raise HydrosApiError(message, status=status)
 
-        message = _error_message(body) or f"{method} {path} returned HTTP {status}"
-        if status in (401, 403):
-            raise HydrosApiAuthError(message, status=status)
-        if status == 429:
-            raise HydrosApiRateLimitError(message, status=status)
-        if status == 404:
-            raise HydrosApiStateUnavailable(message, status=status)
-        raise HydrosApiError(message, status=status)
+            if attempt + 1 < attempts:
+                await asyncio.sleep(1.0)
+
+        assert last_transport_error is not None
+        raise last_transport_error
 
     # -- devices --------------------------------------------------------
 
@@ -295,6 +306,15 @@ class HydrosPublicApiClient:
                 return False
             raise
         return True
+
+
+def _decode_body(text: str) -> Any:
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except ValueError:
+        return text
 
 
 def _error_message(body: Any) -> str | None:

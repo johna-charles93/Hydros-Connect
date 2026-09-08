@@ -231,6 +231,7 @@ class HydrosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_api(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Official CoralVue HYDROS Public API: provider key + device key."""
         errors: dict[str, str] = {}
+        error_detail = ""
 
         if user_input is not None:
             provider_key = str(user_input[CONF_PROVIDER_KEY]).strip()
@@ -239,14 +240,19 @@ class HydrosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 device, permission = await _validate_api_credentials(
                     self.hass, provider_key, device_key
                 )
-            except HydrosApiAuthError:
+            except HydrosApiAuthError as err:
+                _LOGGER.warning("Hydros Public API rejected the keys: %s", err)
                 errors["base"] = "invalid_auth"
+                error_detail = str(err)
             except HydrosApiError as err:
                 _LOGGER.error("Hydros Public API error during config flow: %s", err)
-                errors["base"] = "cannot_connect"
-            except Exception:  # pragma: no cover - defensive
+                status = getattr(err, "status", None)
+                errors["base"] = "server_error" if status and status >= 500 else "cannot_connect"
+                error_detail = str(err)
+            except Exception as err:  # pragma: no cover - defensive
                 _LOGGER.exception("Unexpected Hydros Public API error during config flow")
                 errors["base"] = "unknown"
+                error_detail = str(err)
             else:
                 device_id = str(device.get("deviceId") or "").strip()
                 if not device_id:
@@ -270,6 +276,7 @@ class HydrosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="api",
             data_schema=STEP_API_DATA_SCHEMA,
             errors=errors,
+            description_placeholders={"error_detail": error_detail},
         )
 
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
