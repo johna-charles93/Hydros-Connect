@@ -206,6 +206,25 @@ This avoids common intent collisions where Alexa routes "turn on ..." or "set ..
 - Scenes can appear differently from regular devices in the Alexa app.
 - If scenes seem to "disappear", verify they are still exposed in Home Assistant first, then rediscover in Alexa.
 
+### Scene state shows "Unknown"
+
+This is normal. Home Assistant scene entities have no on/off state — they report
+the time they were last activated, and show `unknown` until the first activation.
+It does not mean the scene is broken; activate it once (from Developer Tools →
+Actions → `scene.turn_on`, or by voice) and it will show a timestamp.
+
+### Scenes not activating / Alexa says "scene not found" (fixed in v0.6.1)
+
+Before v0.6.1, renaming a scene in the integration options created a brand-new
+entity and left the old one behind as an unavailable orphan that Alexa kept
+pointing at. v0.6.1 removes those orphans automatically on startup and keeps a
+stable `entity_id` across renames. After updating:
+
+1. Restart Home Assistant.
+2. Check **Settings → Devices & Services → Entities**, filter by "Hydros" — any
+   leftover `scene.*` entities marked *unavailable* can be deleted.
+3. Re-expose the Hydros scenes to Alexa and run discovery again.
+
 ### Nabu Casa exposure note
 
 - With Home Assistant Cloud (Nabu Casa), Alexa exposure is entity-by-entity by design.

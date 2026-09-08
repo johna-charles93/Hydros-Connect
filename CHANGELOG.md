@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.1 - 2026-09-08
+
+### Fixed
+- **HACS "add repository" failed for everyone** with `trailing comma is not allowed: line 11` — the `manifest.json` shipped in the v0.5.6 release was invalid JSON and no newer release existed. v0.6.x ships a valid manifest, and CI now validates every JSON file on each push, tags included. (#5)
+- **Alexa routine scenes stuck in "unknown" state and not activatable.** The scene `unique_id` was derived from the editable display name, so renaming a scene in options orphaned the old entity (which then sat unavailable while Alexa still targeted it). Scene ids are now keyed on the config entry, target device, and preset slot only; renames keep the same entity and `entity_id`. Orphaned scene entities from older versions are removed automatically on startup and the original `scene.<name>` id is reclaimed. (#3)
+- pH probe/`ph` sensors no longer set a `pH` unit, which is invalid for the `ph` device class and logged a warning for every probe.
+
 ## 0.6.0 - 2026-09-08
 
 ### Added

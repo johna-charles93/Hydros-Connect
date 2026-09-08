@@ -9,6 +9,7 @@ from homeassistant.components.scene import Scene
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_point_in_utc_time
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.storage import Store
@@ -330,7 +331,7 @@ async def async_setup_entry(
 
     presets = _build_presets(entry)
     _LOGGER.debug("Built %d scene presets for thing_id=%s", len(presets), thing_id)
-    
+
     entities: list[HydrosModeRoutineScene] = []
     for preset in presets:
         entities.append(
@@ -347,6 +348,26 @@ async def async_setup_entry(
                 ),
             )
         )
+
+    # Prune stale scene entities. Older versions keyed the scene unique_id on the
+    # (editable) display name, so every rename orphaned an entity that then sat
+    # in "unknown" state and could not be activated — while Alexa kept pointing
+    # at it (issue #3). Remove any hydros scene registry entry for this config
+    # entry whose unique_id isn't one of the current stable ids.
+    current_unique_ids = {entity.unique_id for entity in entities}
+    registry = er.async_get(hass)
+    for reg_entry in list(registry.entities.values()):
+        if reg_entry.config_entry_id != entry.entry_id:
+            continue
+        if reg_entry.domain != "scene" or reg_entry.platform != DOMAIN:
+            continue
+        if reg_entry.unique_id not in current_unique_ids:
+            _LOGGER.info(
+                "Removing stale Hydros scene entity %s (unique_id=%s)",
+                reg_entry.entity_id,
+                reg_entry.unique_id,
+            )
+            registry.async_remove(reg_entry.entity_id)
 
     if entities:
         _LOGGER.info("Adding %d Hydros Alexa scenes", len(entities))
@@ -378,17 +399,21 @@ class HydrosModeRoutineScene(Scene):
         self._device_info = device_info
         self._attr_available = True
 
-        slug = slugify(f"{thing_id}-{preset.key}-{preset.display_name}")
-        scene_slug = slugify(preset.display_name)
-        self._attr_unique_id = f"{hub.entry_id}-{slug}-scene"
-        self._attr_entity_id = f"scene.{scene_slug}"
+        # Stable unique_id: keyed on the config entry, the target thing, and the
+        # preset slot (feed / maintenance / custom) only — NEVER the editable
+        # display name, so renaming a scene keeps the same entity and the same
+        # entity_id that Alexa already knows about.
+        self._attr_unique_id = f"{hub.entry_id}-{slugify(thing_id)}-{preset.key}-scene"
         self._attr_name = preset.display_name
-        
+        # Suggested entity_id from the current name. Home Assistant honours this
+        # on first creation and then keeps it stable across later renames.
+        self.entity_id = f"scene.{slugify(preset.display_name)}"
+
         _LOGGER.debug(
             "Created scene: %s (unique_id=%s, entity_id=%s, mode=%s)",
             preset.display_name,
             self._attr_unique_id,
-            self._attr_entity_id,
+            self.entity_id,
             preset.start_mode,
         )
 

@@ -4,6 +4,32 @@ Paste the relevant section into the GitHub Release body when tagging.
 
 ---
 
+## v0.6.1 — Bug fixes (2026-09-08)
+
+Small follow-up to v0.6.0.
+
+- **HACS install fixed for everyone.** The `manifest.json` in the old v0.5.6
+  release was invalid JSON (a trailing comma), and HACS reads that file from the
+  latest release — so "add repository" failed with
+  `trailing comma is not allowed: line 11`. v0.6.x ships a valid manifest and CI
+  now validates every JSON file on each push. If HACS is still stuck, open the
+  repo in HACS → 3-dot menu → **Update information** (or remove and re-add the
+  custom repo). (#5)
+- **Alexa routine scenes stuck in "unknown" and not activatable.** Scene ids were
+  derived from the editable display name, so renaming a scene orphaned the old
+  entity while Alexa kept targeting it. Scene identity is now stable across
+  renames, orphaned scenes from older versions are cleaned up automatically on
+  startup, and the original `scene.<name>` id is kept. After updating: restart
+  HA, delete any leftover unavailable `scene.*` entities, then re-expose to Alexa
+  and re-run discovery. (#3)
+- pH sensors no longer set an invalid `pH` unit that logged a warning for every
+  probe.
+
+Note: a scene showing **"unknown" state is normal** — HA scenes report their
+last-activated time and have no on/off state.
+
+---
+
 ## v0.6.0 — Official HYDROS API support (2026-09-08)
 
 Hydros Connect now works with CoralVue's **official HYDROS Public API**, alongside

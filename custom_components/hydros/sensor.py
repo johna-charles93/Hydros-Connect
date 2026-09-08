@@ -104,7 +104,8 @@ OUTPUT_STATE_ALIASES = {
 
 _PROBE_MODE_META = {
     1: {
-        "unit": "pH",
+        # SensorDeviceClass.PH is unitless in Home Assistant; setting a "pH"
+        # unit triggers an invalid-unit warning for every probe.
         "device_class": SensorDeviceClass.PH,
         "state_class": SensorStateClass.MEASUREMENT,
     },
@@ -126,7 +127,6 @@ SENSE_MODE_MAP = {
         "state_class": SensorStateClass.MEASUREMENT,
     },
     "ph": {
-        "unit": "pH",
         "device_class": SensorDeviceClass.PH,
         "state_class": SensorStateClass.MEASUREMENT,
     },
