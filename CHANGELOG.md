@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Maintenance
+- Repository housekeeping commit (no functional changes).
+
 ## 0.6.5 - 2026-09-08
 
 ### Fixed
