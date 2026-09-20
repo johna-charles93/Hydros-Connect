@@ -188,6 +188,13 @@ class HydrosApiHub(HydrosHubBase):
             ("state session", self._async_start_session),
             ("initial state poll", self._async_poll_once),
         ):
+            if label == "state session" and not self._session_start_allowed():
+                _LOGGER.debug(
+                    "HYDROS session-start for %s is inside its backoff window; "
+                    "skipping at setup and letting the poll loop retry it",
+                    self._device_id,
+                )
+                continue
             try:
                 await step()
             except HydrosApiAuthError as err:

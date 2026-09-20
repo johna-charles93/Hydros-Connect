@@ -528,7 +528,7 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
         mode_optional_selector: Any = str
         if mode_options:
             mode_map = {mode: mode for mode in mode_options}
-            mode_optional_selector = vol.Any("", vol.In(mode_map))
+            mode_optional_selector = vol.In({"": "(none)", **mode_map})
 
         def _mode_default(option_key: str, fallback: str) -> str:
             current = str(self._config_entry.options.get(option_key, fallback)).strip()
