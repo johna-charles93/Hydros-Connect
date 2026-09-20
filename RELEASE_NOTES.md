@@ -4,6 +4,29 @@ Paste the relevant section into the GitHub Release body when tagging.
 
 ---
 
+## v0.6.6 — Fix Configure-flow 500 and a setup-time backoff bypass (2026-09-19)
+
+Two fixes, both surfaced by running with a live API session for a while:
+
+- **Configure (options flow) 500 error.** Once the integration had real
+  scene/mode names to show (Feeding, Normal, Water Change, etc.), opening
+  **Configure** on the entry failed with `Config flow could not be loaded:
+  500 Internal Server Error`. The scene-mode dropdowns used a schema
+  (`vol.Any("", vol.In(...))`) that Home Assistant's frontend-schema
+  converter can't handle. Replaced with a plain `vol.In(...)` selector that
+  includes an explicit "(none)" choice — Configure loads normally again.
+- **Session-start backoff bypass at setup.** 0.6.5 added a 15–60 minute
+  backoff after a failed `POST /device/state/session` (capped at 5/hour by
+  CoralVue). The regular poll loop respected it, but `async_setup()` did
+  not — a config entry reload or HA restart during the backoff window could
+  still fire a session-start request and erode the budget. Setup now checks
+  the same gate and skips the session-start step if it's still inside the
+  window, letting the poll loop pick it up once it clears.
+
+No config changes needed — just update and restart.
+
+---
+
 ## v0.6.5 — Fix session-start retry storm (2026-09-08)
 
 If setup couldn't open a state session, the poll loop kept asking for a new one

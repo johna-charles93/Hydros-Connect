@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.6 - 2026-09-19
+
+### Fixed
+- **Configure/options flow crashed with a 500** ("Config flow could not be loaded") once the API path had real scene/mode names to offer. The scene-mode fields used a `vol.Any("", vol.In(mode_map))` schema that Home Assistant's frontend-schema serializer can't convert; replaced with a single `vol.In(...)` selector that includes an explicit "(none)" option.
+- **Setup-time session-start could bypass the 5/hour backoff window** introduced in 0.6.5. `async_setup()` called `_async_start_session()` unconditionally instead of checking `_session_start_allowed()` first like the poll loop does, so a config entry reload/restart during the backoff window could still trigger a session-start request. Setup now skips the session-start step and lets the poll loop retry once the window clears.
+
 ### Maintenance
 - Repository housekeeping commit (no functional changes).
 
