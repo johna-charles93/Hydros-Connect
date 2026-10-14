@@ -115,9 +115,11 @@ async def _validate_api_credentials(
     device = await client.async_get_device()
     try:
         writable = await client.async_probe_write_permission()
-    except HydrosApiError:
+    except HydrosApiError as err:
         # A transient failure probing permission should not block setup; assume
-        # read-only and let the user widen later.
+        # read-only for now — the hub re-checks on every load and upgrades the
+        # stored permission once the probe succeeds.
+        _LOGGER.warning("HYDROS write-permission probe failed during setup: %s", err)
         writable = False
     permission = KEY_PERMISSION_WRITE if writable else KEY_PERMISSION_READ
     return device, permission

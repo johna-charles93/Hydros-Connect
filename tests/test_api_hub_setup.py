@@ -236,3 +236,52 @@ async def test_api_hub_pump_speed_scales_to_level(
     client.async_put_overrides.assert_awaited()
     payload = client.async_put_overrides.call_args.args[0]
     assert payload == {"uuid-return": 4200}
+
+
+@pytest.mark.parametrize("probe_result, expected", [(True, "write"), (False, "read")])
+async def test_read_only_entry_rechecks_and_heals_permission(
+    hass: HomeAssistant, probe_result: bool, expected: str
+) -> None:
+    """An entry stored as read-only re-probes on load and upgrades if writable."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Display Tank",
+        unique_id="api:a0b765227294",
+        data={
+            CONF_AUTH_MODE: AUTH_MODE_API,
+            CONF_PROVIDER_KEY: "prov",
+            CONF_DEVICE_KEY: "dev",
+            CONF_DEVICE_ID: "a0b765227294",
+            CONF_KEY_PERMISSION: "read",
+        },
+        options={CONF_ENABLE_REMOTE_CONTROL: True},
+    )
+    entry.add_to_hass(hass)
+    client = _mock_api_client()
+    client.async_probe_write_permission.return_value = probe_result
+    with patch(
+        "custom_components.hydros.api_hub.HydrosPublicApiClient",
+        return_value=client,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    client.async_probe_write_permission.assert_awaited_once()
+    assert entry.data[CONF_KEY_PERMISSION] == expected
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_write_entry_does_not_reprobe(
+    hass: HomeAssistant, api_entry: MockConfigEntry
+) -> None:
+    client = _mock_api_client()
+    with patch(
+        "custom_components.hydros.api_hub.HydrosPublicApiClient",
+        return_value=client,
+    ):
+        assert await hass.config_entries.async_setup(api_entry.entry_id)
+        await hass.async_block_till_done()
+    client.async_probe_write_permission.assert_not_awaited()
+    assert await hass.config_entries.async_unload(api_entry.entry_id)
+    await hass.async_block_till_done()

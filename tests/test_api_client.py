@@ -143,6 +143,19 @@ async def test_probe_write_permission_true_and_false() -> None:
     assert await readonly.async_probe_write_permission() is False
 
 
+async def test_probe_write_permission_400_empty_body_means_writable() -> None:
+    # Current API rejects the empty probe body *after* the permission check.
+    client, _ = _client(lambda *_: (400, '{"error":"No overrides specified"}'))
+    assert await client.async_probe_write_permission() is True
+
+
+@pytest.mark.parametrize("status", [429, 500])
+async def test_probe_write_permission_transient_errors_raise(status: int) -> None:
+    client, _ = _client(lambda *_: (status, '{"error": "nope"}'))
+    with pytest.raises(HydrosApiError):
+        await client.async_probe_write_permission()
+
+
 async def test_start_session_parses_fields() -> None:
     body = (
         '{"pollUrl": "https://api.example.test/api/v1/device/state?id=sess-1",'

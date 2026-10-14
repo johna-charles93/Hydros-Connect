@@ -178,6 +178,12 @@ class HydrosApiHub(HydrosHubBase):
             "HYDROS device for %s: keys=%s", self._device_id, sorted(self._device_meta)
         )
 
+        # Entries stored as read-only may have been mis-detected at setup (a
+        # transient error or an API change in the probe response). Re-check
+        # once per load and heal the stored permission if the key can write.
+        if not self._write_capable:
+            await self._async_recheck_write_permission()
+
         # Metadata / session / first poll are best-effort: bring the entry up
         # even if they fail so the entities exist (unavailable) and the poll
         # loop can keep retrying. A stuck ConfigEntryNotReady here would hide a
@@ -217,6 +223,28 @@ class HydrosApiHub(HydrosHubBase):
         )
         self._unsub_poll = async_track_time_interval(
             self._hass, self._handle_interval, timedelta(seconds=interval)
+        )
+
+    async def _async_recheck_write_permission(self) -> None:
+        assert self._client is not None
+        try:
+            writable = await self._client.async_probe_write_permission()
+        except HydrosApiError as err:
+            _LOGGER.debug(
+                "HYDROS write-permission re-check for %s failed: %s", self._device_id, err
+            )
+            return
+        if not writable:
+            return
+        _LOGGER.info(
+            "HYDROS device key for %s is read/write; updating the stored key "
+            "permission (it was recorded as read-only at setup)",
+            self._device_id,
+        )
+        self._write_capable = True
+        self._hass.config_entries.async_update_entry(
+            self._entry,
+            data={**self._entry.data, CONF_KEY_PERMISSION: KEY_PERMISSION_WRITE},
         )
 
     async def async_unload(self) -> None:

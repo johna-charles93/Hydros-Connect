@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.8 - 2026-10-14
+
+### Fixed
+- **Read/write device keys detected as read-only** ("This HYDROS device key is read-only…" on every mode/outlet/pump command). The setup-time permission probe sends an empty `PUT /device/overrides`; CoralVue's API now answers that with `400 No overrides specified` instead of a no-op `2xx`, and the integration treated any non-403 error as read-only. A `400` means the key passed the permission check, so it is now treated as read/write. Only a `403` means read-only; `429`/`5xx`/network errors are logged and no longer silently recorded as read-only.
+- Entries already stored as read-only **re-check the key on every load** and upgrade the stored permission automatically when the key can write — no need to delete the entry or re-enter keys. Just update and restart.
+
 ## 0.6.7 - 2026-10-14
 
 ### Resolved upstream

@@ -334,14 +334,29 @@ class HydrosPublicApiClient:
     async def async_probe_write_permission(self) -> bool:
         """Return ``True`` if the device key is write-scoped.
 
-        Sends ``PUT /overrides`` with an empty body — a documented no-op that
-        still runs the permission check. ``403`` means read-only.
+        Sends ``PUT /overrides`` with an empty body. The permission check runs
+        before body validation, so:
+
+        * ``2xx`` — write-scoped (older API: empty body was a no-op);
+        * ``400`` (e.g. ``"No overrides specified"``) — the key passed the
+          permission check and only the empty body was rejected, so it is
+          write-scoped;
+        * ``403`` — read-only.
+
+        Anything else (5xx, 429, network) is raised so the caller can tell a
+        transient failure apart from a real read-only key.
         """
         try:
             await self.async_put_overrides({})
         except HydrosApiAuthError as err:
             if err.status == 403:
                 return False
+            raise
+        except HydrosApiRateLimitError:
+            raise
+        except HydrosApiError as err:
+            if err.status == 400:
+                return True
             raise
         return True
 

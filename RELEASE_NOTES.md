@@ -4,6 +4,22 @@ Paste the relevant section into the GitHub Release body when tagging.
 
 ---
 
+## v0.6.8 — Fix read/write keys detected as read-only (2026-10-14)
+
+If commands fail with **"This HYDROS device key is read-only. Create a
+read/write device key…"** even though your key is read/write, this fixes it.
+
+- CoralVue's API changed how it answers the integration's permission check
+  (an empty `PUT /device/overrides` now returns `400 No overrides specified`).
+  The integration took that as "read-only". It now correctly reads a `400` as
+  "permission OK" — only a `403` means read-only.
+- Existing entries heal themselves: on startup, an entry stored as read-only
+  re-checks the key and switches to read/write if allowed. **Update, restart
+  Home Assistant, and controls work** — no need to re-add the integration or
+  re-enter keys.
+
+---
+
 ## v0.6.7 — "Invalid thing name" resolved by CoralVue (2026-10-14)
 
 CoralVue has fixed the backend bug behind
