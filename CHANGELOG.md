@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.7 - 2026-10-14
+
+### Resolved upstream
+- **`500: Invalid thing name specified in request` on `POST /api/v1/device/state/session`** is fixed on CoralVue's side. It was a backend bug resolving the device's thing name when the collective's id contains a space (e.g. `90 D1c46edda`); it reproduced with a bare `curl` outside Home Assistant, so no client change was needed. Existing installs recover on their own at the next session-start retry (≤15 min) — a reload just speeds it up. (#6)
+
+### Changed
+- Docs: removed the "report this on issue #6" guidance for this error from the release notes and added the resolution.
+- After recovery, the API path now creates the input sensors (temperature, pH, leak, per-outlet power) that were missing while the session couldn't start. If a dashboard pointed at a placeholder entity from the outage (e.g. `sensor.<device>_octo_4_right_ph_2`), repoint it to the new one (e.g. `sensor.<device>_ph`).
+
 ## 0.6.6 - 2026-09-19
 
 ### Fixed

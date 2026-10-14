@@ -4,6 +4,26 @@ Paste the relevant section into the GitHub Release body when tagging.
 
 ---
 
+## v0.6.7 — "Invalid thing name" resolved by CoralVue (2026-10-14)
+
+CoralVue has fixed the backend bug behind
+`500: Internal server error: Invalid thing name specified in request` on
+`POST /device/state/session` (it hit collectives whose internal id contains a
+space). Nothing in the integration had to change — the request was
+spec-correct and the error reproduced with plain `curl`.
+
+- **If you were affected:** update, then reload the Hydros Connect entry (or
+  just wait — the poll loop retries session-start every ~15 minutes).
+  Live data, temperature, pH, leak, and per-outlet power sensors come back
+  once the session starts.
+- **Dashboards:** some sensors are created fresh after recovery. If a card
+  still shows `--` or `unavailable`, point it at the new entity
+  (e.g. `…_ph` instead of `…_octo_4_right_ph_2`) and delete the orphaned one.
+
+Thanks to everyone who added logs and curl repros to #6.
+
+---
+
 ## v0.6.6 — Fix Configure-flow 500 and a setup-time backoff bypass (2026-09-19)
 
 Two fixes, both surfaced by running with a live API session for a while:
@@ -55,10 +75,8 @@ For the API path, when `GET /device` works but a later setup call fails:
 
 If you see `Invalid thing name specified in request` (or any other API error)
 during setup: the warning log now names the exact endpoint and status. That
-message comes from CoralVue's backend — please capture the log line and add it
-to [issue #6](https://github.com/johna-charles93/Hydros-Connect/issues/6) and a
-CoralVue support ticket. A collective whose name contains a space is a likely
-trigger.
+message came from CoralVue's backend and was fixed upstream on 2026-10-14 (see
+v0.6.7 above and [issue #6](https://github.com/johna-charles93/Hydros-Connect/issues/6)).
 
 ---
 
