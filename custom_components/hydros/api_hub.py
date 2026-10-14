@@ -31,6 +31,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady, HomeAssistantError
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
@@ -48,8 +49,10 @@ from .api import (
 from .const import (
     CONF_DEVICE_ID,
     CONF_DEVICE_KEY,
+    CONF_ENABLE_REMOTE_CONTROL,
     CONF_KEY_PERMISSION,
     CONF_PROVIDER_KEY,
+    DEFAULT_API_ISSUE_AFTER_SECONDS,
     DEFAULT_API_METADATA_RETRY,
     DEFAULT_API_METADATA_TTL,
     DEFAULT_API_POLL_INTERVAL,
@@ -59,6 +62,7 @@ from .const import (
     DEFAULT_COMMAND_CONFIRM_TIMEOUT,
     DEFAULT_MODE_COMMAND_COOLDOWN_SECONDS,
     DEFAULT_OUTPUT_COMMAND_COOLDOWN_SECONDS,
+    DOMAIN,
     KEY_PERMISSION_WRITE,
     SIGNAL_COLLECTIVE_UPDATED,
     SIGNAL_CONFIG_UPDATED,
@@ -151,6 +155,7 @@ class HydrosApiHub(HydrosHubBase):
         self._api_last_error_at: datetime | None = None
 
         self._debug_sample: dict[str, Any] | None = None
+        self._setup_at: datetime = dt_util.utcnow()
 
     # -- lifecycle ------------------------------------------------------
 
@@ -183,6 +188,7 @@ class HydrosApiHub(HydrosHubBase):
         # once per load and heal the stored permission if the key can write.
         if not self._write_capable:
             await self._async_recheck_write_permission()
+        self._update_read_only_issue()
 
         # Metadata / session / first poll are best-effort: bring the entry up
         # even if they fail so the entities exist (unavailable) and the poll
@@ -248,6 +254,7 @@ class HydrosApiHub(HydrosHubBase):
         )
 
     async def async_unload(self) -> None:
+        ir.async_delete_issue(self._hass, DOMAIN, self._issue_api_id)
         if self._unsub_poll is not None:
             self._unsub_poll()
             self._unsub_poll = None
@@ -453,10 +460,70 @@ class HydrosApiHub(HydrosHubBase):
 
     def _note_success(self) -> None:
         self._api_last_success = self._utcnow()
+        self._update_api_issue()
 
     def _note_error(self, err: Exception) -> None:
         self._api_last_error = str(err)
         self._api_last_error_at = self._utcnow()
+        self._update_api_issue()
+
+    # -- repairs ------------------------------------------------------
+
+    @property
+    def _issue_api_id(self) -> str:
+        return f"api_unreachable_{self._entry.entry_id}"
+
+    @property
+    def _issue_read_only_id(self) -> str:
+        return f"read_only_key_{self._entry.entry_id}"
+
+    def _update_api_issue(self) -> None:
+        """Raise a Repairs issue after a sustained run of API failures."""
+        now = self._utcnow()
+        last_ok = self._api_last_success
+        failing = (
+            self._api_last_error_at is not None
+            and (last_ok is None or self._api_last_error_at > last_ok)
+            and (now - (last_ok or self._setup_at)).total_seconds()
+            >= DEFAULT_API_ISSUE_AFTER_SECONDS
+        )
+        if failing:
+            ir.async_create_issue(
+                self._hass,
+                DOMAIN,
+                self._issue_api_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="api_unreachable",
+                translation_placeholders={
+                    "title": self._entry.title,
+                    "error": (self._api_last_error or "unknown error")[:300],
+                },
+            )
+        elif last_ok is not None and (
+            self._api_last_error_at is None or last_ok >= self._api_last_error_at
+        ):
+            ir.async_delete_issue(self._hass, DOMAIN, self._issue_api_id)
+
+    def _update_read_only_issue(self) -> None:
+        remote = bool(
+            self._entry.options.get(
+                CONF_ENABLE_REMOTE_CONTROL,
+                self._entry.data.get(CONF_ENABLE_REMOTE_CONTROL, False),
+            )
+        )
+        if remote and not self._write_capable:
+            ir.async_create_issue(
+                self._hass,
+                DOMAIN,
+                self._issue_read_only_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="read_only_key",
+                translation_placeholders={"title": self._entry.title},
+            )
+        else:
+            ir.async_delete_issue(self._hass, DOMAIN, self._issue_read_only_id)
 
     @callback
     def _dispatch(self) -> None:

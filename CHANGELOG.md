@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.7.0 - 2026-10-14
+
+### Added
+- **Reconfigure** (API entries): Settings → Devices & services → Hydros Connect → ⋮ → Reconfigure lets you swap the provider/device key in place. Entities, history and dashboards are kept; a key for a different controller is rejected.
+- **Repairs issues**: a read-only device key while remote control is on, and the HYDROS API failing for 30+ minutes, now show up in Settings → Repairs with what to do. They clear themselves when resolved.
+- **Diagnostics download** with provider/device keys and poll tokens redacted, for bug reports.
+- **"Dosed today (estimated)"** sensor per doser on the API path, derived from reservoir-level drops (refills and glitches ignored, resets at midnight). Attributes include a 7-day history, average daily dose and estimated days of supply remaining.
+- **Automatic GitHub releases**: pushing a `vX.Y.Z` tag publishes the release (body taken from `RELEASE_NOTES.md`) so HACS offers the update. The workflow refuses to publish if `manifest.json` doesn't match the tag.
+
+### Changed
+- Health/debug entities (MQTT health/age, API status, pending commands, debug sample, Debug Sample / Validate Setup buttons) are now in the **diagnostic** category, so they stay off auto-generated dashboards.
+- Controller-internal sub-outputs (e.g. `Alkalinity /manualFlowRate`) are disabled by default for new installs.
+- Output sensors expose `thing_id` / `output_key`, so `hydros.manual_dose` and other services can target them by `entity_id`.
+
 ## 0.6.9 - 2026-10-14
 
 ### Fixed

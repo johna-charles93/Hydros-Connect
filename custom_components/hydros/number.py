@@ -134,6 +134,9 @@ class HydrosPumpSpeedNumber(NumberEntity):
         self._attr_unique_id = description.key
         self._attr_name = description.name
         self._remove_dispatcher: Callable[[], None] | None = None
+        if "/" in self._output_key:
+            # Controller-internal sub-output (e.g. "Alkalinity /manualFlowRate").
+            self._attr_entity_registry_enabled_default = False
 
     @property
     def device_info(self) -> DeviceInfo:

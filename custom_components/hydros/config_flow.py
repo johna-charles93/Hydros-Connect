@@ -295,6 +295,66 @@ class HydrosConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={"error_detail": error_detail},
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Swap the provider/device key of an API entry in place.
+
+        Keeps the config entry (and therefore every entity id and dashboard
+        reference) instead of forcing a delete + re-add.
+        """
+        entry = self._get_reconfigure_entry()
+        if entry.data.get(CONF_AUTH_MODE) != AUTH_MODE_API:
+            return self.async_abort(reason="reconfigure_not_supported")
+
+        errors: dict[str, str] = {}
+        error_detail = ""
+        if user_input is not None:
+            provider_key = str(user_input[CONF_PROVIDER_KEY]).strip()
+            device_key = str(user_input[CONF_DEVICE_KEY]).strip()
+            try:
+                device, permission = await _validate_api_credentials(
+                    self.hass, provider_key, device_key
+                )
+            except HydrosApiAuthError as err:
+                errors["base"] = "invalid_auth"
+                error_detail = str(err)
+            except HydrosApiError as err:
+                status = getattr(err, "status", None)
+                errors["base"] = "server_error" if status and status >= 500 else "cannot_connect"
+                error_detail = str(err)
+            else:
+                device_id = device_identifier(device)
+                current_id = str(entry.data.get(CONF_DEVICE_ID) or "")
+                if device_id and current_id and device_id != current_id:
+                    # A key for a different controller would silently re-point
+                    # every entity at the wrong tank.
+                    return self.async_abort(reason="wrong_device")
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        CONF_PROVIDER_KEY: provider_key,
+                        CONF_DEVICE_KEY: device_key,
+                        CONF_DEVICE_ID: device_id or current_id,
+                        CONF_KEY_PERMISSION: permission,
+                    },
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_PROVIDER_KEY,
+                        default=entry.data.get(CONF_PROVIDER_KEY, ""),
+                    ): str,
+                    vol.Required(CONF_DEVICE_KEY): str,
+                }
+            ),
+            errors=errors,
+            description_placeholders={"error_detail": error_detail},
+        )
+
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
         self._reauth_entry = self.hass.config_entries.async_get_entry(
             self.context["entry_id"]

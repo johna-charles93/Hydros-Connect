@@ -4,6 +4,30 @@ Paste the relevant section into the GitHub Release body when tagging.
 
 ---
 
+## v0.7.0 — Reconfigure, Repairs, diagnostics and dosing estimates (2026-10-14)
+
+- **Change keys without starting over.** Settings → Devices & services →
+  Hydros Connect → ⋮ → **Reconfigure**. Your entities, history and
+  dashboards stay put.
+- **Repairs.** A read-only key with remote control on, or the HYDROS API
+  being unreachable for 30+ minutes, now appears in **Settings → Repairs**
+  with instructions, and clears itself once fixed.
+- **Download diagnostics** from the integration's ⋮ menu (keys redacted) —
+  please attach it to bug reports.
+- **"Dosed today (estimated)"** for each doser on the API path, worked out
+  from reservoir-level drops. It also reports the 7-day average and roughly
+  how many days of supply are left.
+- **Tidier entity list.** Health/debug entities are now diagnostic, and
+  internal sub-outputs like `Alkalinity /manualFlowRate` are hidden by
+  default on new installs.
+- **Manual dosing by entity.** `hydros.manual_dose` can now target a doser
+  sensor's `entity_id` directly.
+
+No config changes needed — update in HACS and restart. Releases are now
+published automatically when a version tag is pushed.
+
+---
+
 ## v0.6.9 — Fix "Not all required fields are filled in" on Configure (2026-10-14)
 
 Fixes #7 / #8: turning on **Enable remote control** under **Configure** no

@@ -28,11 +28,12 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_registry as er
 
 from .const import DEFAULT_AVAILABILITY_WINDOW_SECONDS, DOMAIN
+from .dosing_estimate import async_add_dosing_estimates
 from .hub_base import HydrosHubBase
 from .hydros_hub import HydrosHub
 from .types import (
@@ -54,6 +55,17 @@ from .entity_builders import (
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+_DIAGNOSTIC_SECTIONS = frozenset(
+    {
+        "Collective",
+        "CollectiveMqttAge",
+        "CollectiveApiStatus",
+        "CollectivePendingCommands",
+        "CollectiveDebug",
+    }
+)
 
 
 @dataclass
@@ -345,6 +357,11 @@ async def async_setup_entry(
     )
     entry_data["sensor_manager"] = manager
     await manager.async_setup()
+
+    if not getattr(hub, "supports_dosing_history", True):
+        # No dosing-log endpoint (API path): estimate daily dosing from the
+        # reservoir level instead.
+        await async_add_dosing_estimates(hass, hub, entry, async_add_entities)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -812,6 +829,16 @@ class HydrosSensor(SensorEntity):
         }
         self._self_dispatch = False
         self._remove_dispatcher: Callable[[], None] | None = None
+        self._apply_entity_flags()
+
+    def _apply_entity_flags(self) -> None:
+        # Health/debug sensors are diagnostics, not things to put on a dashboard.
+        if self._section in _DIAGNOSTIC_SECTIONS:
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        # Sub-outputs such as "Alkalinity /manualFlowRate" are internal to the
+        # controller and always read "unknown" on the API path; hide by default.
+        if self._section == "Output" and "/" in self._input_key:
+            self._attr_entity_registry_enabled_default = False
 
     def refresh_from_description(
         self, description: HydrosSensorEntityDescription, device_info: DeviceInfo
@@ -838,6 +865,7 @@ class HydrosSensor(SensorEntity):
         if self._section == "Collective":
             self._last_health_state = None
         self._self_dispatch = False
+        self._apply_entity_flags()
 
         return changed
 
@@ -1013,6 +1041,13 @@ class HydrosSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
+        attrs = self._base_extra_state_attributes()
+        if self._section == "Output" and self._thing_id and self._input_key:
+            # Lets service calls (e.g. hydros.manual_dose) target this entity.
+            attrs = {**(attrs or {}), "thing_id": self._thing_id, "output_key": self._input_key}
+        return attrs
+
+    def _base_extra_state_attributes(self) -> dict[str, Any] | None:
         if self._section == "Collective":
             attrs: dict[str, Any] = {}
             last_ts = self._hub.get_latest_status_ts(self._thing_id)

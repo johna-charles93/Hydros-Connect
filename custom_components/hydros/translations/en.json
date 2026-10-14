@@ -33,6 +33,14 @@
           "provider_key": "Provider key",
           "device_key": "Device key"
         }
+      },
+      "reconfigure": {
+        "title": "Change HYDROS keys",
+        "description": "Replace the provider key and/or device key for this controller. Your entities, history and dashboards are kept.\n\nUse a \"Read & write\" device key if you want remote control.\n\n{error_detail}",
+        "data": {
+          "provider_key": "Provider key",
+          "device_key": "Device key"
+        }
       }
     },
     "error": {
@@ -45,7 +53,10 @@
     "abort": {
       "no_collectives": "No collectives available for this account.",
       "already_configured": "This HYDROS device is already set up.",
-      "reauth_successful": "HYDROS re-authentication succeeded."
+      "reauth_successful": "HYDROS re-authentication succeeded.",
+      "reconfigure_successful": "Keys updated. The integration has been reloaded.",
+      "wrong_device": "That device key belongs to a different HYDROS controller. Add it as a new integration entry instead.",
+      "reconfigure_not_supported": "Reconfigure is only available for entries using the Official HYDROS API. Use re-authentication for account-login entries."
     }
   },
   "options": {
@@ -108,6 +119,16 @@
     },
     "error": {
       "ack_required": "You must accept the disclaimer to enable remote control."
+    }
+  },
+  "issues": {
+    "api_unreachable": {
+      "title": "HYDROS API not responding for {title}",
+      "description": "Hydros Connect hasn't been able to get data from the CoralVue HYDROS API for at least 30 minutes, so live readings and controls for **{title}** may be stale.\n\nLast error: `{error}`\n\nThis usually clears on its own once the HYDROS cloud is reachable again. If it persists, check the HYDROS app, then download diagnostics from the integration page and open an issue on GitHub."
+    },
+    "read_only_key": {
+      "title": "Read-only HYDROS key on {title}",
+      "description": "Remote control is turned on for **{title}**, but its device key only has read access, so mode, outlet, pump and dosing commands will be rejected.\n\nCreate a **Read & write** device key in the HYDROS app, then go to Settings → Devices & services → Hydros Connect → ⋮ → **Reconfigure** and paste it in."
     }
   }
 }

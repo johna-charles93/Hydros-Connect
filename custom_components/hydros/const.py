@@ -38,6 +38,8 @@ DEFAULT_API_SESSION_RENEW_MARGIN = 1800  # 30 minutes
 # repeated rate-limit responses.
 DEFAULT_API_SESSION_RETRY_BASE = 900  # 15 minutes -> <= 4 attempts/hour
 DEFAULT_API_SESSION_RETRY_MAX = 3600  # 1 hour
+# Raise a Repairs issue once the API has been failing this long.
+DEFAULT_API_ISSUE_AFTER_SECONDS = 1800  # 30 minutes
 # Override metadata only changes on device reconfiguration; cache aggressively.
 DEFAULT_API_METADATA_TTL = 900  # 15 minutes
 # After a metadata fetch fails, wait this long before retrying it.

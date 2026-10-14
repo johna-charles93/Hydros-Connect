@@ -1,0 +1,69 @@
+name: Release
+
+# Publishing a GitHub release is what makes HACS offer an update — a bare tag
+# is not enough. This creates the release automatically when a version tag is
+# pushed, using that version's section of RELEASE_NOTES.md as the body.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish (e.g. v0.7.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: echo "tag=${INPUT_TAG:-$GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+
+      - name: Check manifest version matches tag
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          manifest=$(python3 -c "import json;print(json.load(open('custom_components/hydros/manifest.json'))['version'])")
+          if [ "v${manifest}" != "${tag}" ]; then
+            echo "::error::manifest.json version (${manifest}) does not match tag ${tag}"
+            exit 1
+          fi
+
+      - name: Extract release notes
+        id: notes
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          python3 - "$tag" <<'PY'
+          import re, sys, pathlib
+          tag = sys.argv[1]
+          text = pathlib.Path("RELEASE_NOTES.md").read_text()
+          m = re.search(rf"^## {re.escape(tag)}\b(.*?)$\n(.*?)(?=^---\s*$|^## v|\Z)", text, re.M | re.S)
+          if not m:
+              print(f"::error::No '## {tag}' section in RELEASE_NOTES.md")
+              sys.exit(1)
+          title = (tag + m.group(1)).strip()
+          title = re.sub(r"\s*\(\d{4}-\d{2}-\d{2}\)$", "", title)
+          pathlib.Path("release_title.txt").write_text(title)
+          pathlib.Path("release_body.md").write_text(m.group(2).strip() + "\n")
+          PY
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; updating notes."
+            gh release edit "$tag" --title "$(cat release_title.txt)" --notes-file release_body.md
+          else
+            gh release create "$tag" --title "$(cat release_title.txt)" --notes-file release_body.md --latest
+          fi

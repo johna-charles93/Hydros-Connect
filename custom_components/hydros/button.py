@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import slugify
 
@@ -83,6 +83,7 @@ async def async_setup_entry(
 
 class HydrosDebugButton(ButtonEntity):
     _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, *, hub: HydrosHub, thing_id: str, device_info: DeviceInfo) -> None:
         self._hub = hub
@@ -103,6 +104,7 @@ class HydrosDebugButton(ButtonEntity):
 
 class HydrosSetupValidationButton(ButtonEntity):
     _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
