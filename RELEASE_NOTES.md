@@ -4,6 +4,24 @@ Paste the relevant section into the GitHub Release body when tagging.
 
 ---
 
+## v0.6.9 — Fix "Not all required fields are filled in" on Configure (2026-10-14)
+
+Fixes #7 / #8: turning on **Enable remote control** under **Configure** no
+longer fails with *"Not all required fields are filled in."*
+
+- All Alexa scene fields are now optional — leave anything you don't use blank.
+  You no longer need Alexa (or any scene) set up to enable remote control.
+- The Configure form is reorganized: remote control and Alexa toggles at the
+  top, then collapsible **Feed scene**, **Maintenance scene** and **Custom
+  scene** sections with clearer labels and a mode dropdown.
+- Saving options now reloads the entry through Home Assistant's standard
+  reload, which fixes an occasional hang / half-loaded entry after saving.
+
+No config changes needed — update in HACS and restart. Existing settings are
+kept. Thanks @Ftown14 for the report and PR #8.
+
+---
+
 ## v0.6.8 — Fix read/write keys detected as read-only (2026-10-14)
 
 If commands fail with **"This HYDROS device key is read-only. Create a

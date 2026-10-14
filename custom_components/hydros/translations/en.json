@@ -52,27 +52,50 @@
     "step": {
       "init": {
         "title": "Remote control and Alexa",
-        "description": "Manage Hydros remote control and Alexa-friendly routine scenes directly in Integration Settings.",
+        "description": "Turn on remote control to change modes, outlets and pumps from Home Assistant. The Alexa scene settings below are optional — leave any field blank if you don't use it.",
         "data": {
           "enable_remote_control": "Enable remote control",
           "enable_alexa_scenes": "Enable Alexa routine scenes",
           "alexa_easy_setup": "Use easy setup defaults (recommended)",
-          "alexa_target_collective": "Target collective for Alexa scenes",
-          "alexa_feed_scene_name": "Feed scene name",
-          "alexa_feed_scene_mode": "Feed start mode",
-          "alexa_feed_return_enabled": "Feed: return to another mode",
-          "alexa_feed_return_delay_minutes": "Feed: return delay (minutes)",
-          "alexa_feed_return_mode": "Feed: return mode",
-          "alexa_maint_scene_name": "Maintenance scene name",
-          "alexa_maint_scene_mode": "Maintenance start mode",
-          "alexa_maint_return_enabled": "Maintenance: return to another mode",
-          "alexa_maint_return_delay_minutes": "Maintenance: return delay (minutes)",
-          "alexa_maint_return_mode": "Maintenance: return mode",
-          "alexa_custom_scene_name": "Custom scene name (optional)",
-          "alexa_custom_scene_mode": "Custom start mode (optional)",
-          "alexa_custom_return_enabled": "Custom: return to another mode",
-          "alexa_custom_return_delay_minutes": "Custom: return delay (minutes)",
-          "alexa_custom_return_mode": "Custom: return mode"
+          "alexa_target_collective": "Target collective for Alexa scenes"
+        },
+        "data_description": {
+          "alexa_easy_setup": "Uses the default Feed and Maintenance scenes and ignores the scene settings below."
+        },
+        "sections": {
+          "feed_scene": {
+            "name": "Feed scene",
+            "description": "Optional. Used only when Alexa scenes are on and easy setup is off.",
+            "data": {
+              "alexa_feed_scene_name": "Scene name",
+              "alexa_feed_scene_mode": "Start mode",
+              "alexa_feed_return_enabled": "Switch to another mode afterward",
+              "alexa_feed_return_delay_minutes": "Switch after (minutes)",
+              "alexa_feed_return_mode": "Mode to switch to"
+            }
+          },
+          "maintenance_scene": {
+            "name": "Maintenance scene",
+            "description": "Optional. Used only when Alexa scenes are on and easy setup is off.",
+            "data": {
+              "alexa_maint_scene_name": "Scene name",
+              "alexa_maint_scene_mode": "Start mode",
+              "alexa_maint_return_enabled": "Switch to another mode afterward",
+              "alexa_maint_return_delay_minutes": "Switch after (minutes)",
+              "alexa_maint_return_mode": "Mode to switch to"
+            }
+          },
+          "custom_scene": {
+            "name": "Custom scene",
+            "description": "Optional. Leave blank if you don't need a third scene.",
+            "data": {
+              "alexa_custom_scene_name": "Scene name",
+              "alexa_custom_scene_mode": "Start mode",
+              "alexa_custom_return_enabled": "Switch to another mode afterward",
+              "alexa_custom_return_delay_minutes": "Switch after (minutes)",
+              "alexa_custom_return_mode": "Mode to switch to"
+            }
+          }
         }
       },
       "disclaimer": {

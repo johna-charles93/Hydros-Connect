@@ -6,8 +6,9 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.data_entry_flow import FlowResult, section
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
@@ -73,6 +74,10 @@ from .const import (
 from .mode_utils import extract_mode_options
 
 _LOGGER = logging.getLogger(__name__)
+
+SECTION_FEED_SCENE = "feed_scene"
+SECTION_MAINT_SCENE = "maintenance_scene"
+SECTION_CUSTOM_SCENE = "custom_scene"
 
 try:
     from pyhydros import HydrosAPI, HydrosAPIError, HydrosAuthError
@@ -527,10 +532,27 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
             except Exception:  # noqa: BLE001
                 mode_options = []
 
-        mode_optional_selector: Any = str
+        # Scene mode pickers: a dropdown of the controller's modes when known,
+        # free text otherwise. All scene fields are *optional* — blank means
+        # "not used". Marking them vol.Required made the frontend refuse to
+        # submit ("Not all required fields are filled in") whenever one was
+        # blank, e.g. the custom scene, even for users who never use Alexa.
+        mode_selector: Any
         if mode_options:
-            mode_map = {mode: mode for mode in mode_options}
-            mode_optional_selector = vol.In({"": "(none)", **mode_map})
+            mode_selector = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=mode_options,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            )
+        else:
+            mode_selector = selector.TextSelector()
+        name_selector = selector.TextSelector()
+        delay_selector = selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=1, max=1440, step=1, mode=selector.NumberSelectorMode.BOX
+            )
+        )
 
         def _mode_default(option_key: str, fallback: str) -> str:
             current = str(self._config_entry.options.get(option_key, fallback)).strip()
@@ -545,6 +567,54 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
             if not fallback:
                 return ""
             return mode_options[0]
+
+        def _suggest(value: Any) -> dict[str, Any]:
+            # Only pre-fill non-empty values; a blank field stays blank (unused).
+            return {"suggested_value": value} if value not in ("", None) else {}
+
+        def _scene_section(
+            name_key: str,
+            name_default: str,
+            mode_key: str,
+            mode_fallback: str,
+            return_enabled_key: str,
+            return_enabled_default: bool,
+            delay_key: str,
+            delay_default: int,
+            return_mode_key: str,
+            return_mode_fallback: str,
+        ) -> vol.Schema:
+            opts = self._config_entry.options
+            return vol.Schema(
+                {
+                    vol.Optional(
+                        name_key,
+                        description=_suggest(str(opts.get(name_key, name_default)).strip()),
+                    ): name_selector,
+                    vol.Optional(
+                        mode_key,
+                        description=_suggest(_mode_default(mode_key, mode_fallback)),
+                    ): mode_selector,
+                    vol.Optional(
+                        return_enabled_key,
+                        default=bool(opts.get(return_enabled_key, return_enabled_default)),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        delay_key,
+                        default=int(opts.get(delay_key, delay_default)),
+                    ): delay_selector,
+                    vol.Optional(
+                        return_mode_key,
+                        description=_suggest(
+                            _mode_default(return_mode_key, return_mode_fallback)
+                        ),
+                    ): mode_selector,
+                }
+            )
+
+        # Scene details are only edited when Alexa scenes are on and easy
+        # setup is off, so keep them collapsed otherwise.
+        scenes_collapsed = not current_alexa_enabled or current_easy_setup
 
         schema_dict: dict[Any, Any] = {
             vol.Required(
@@ -569,132 +639,35 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 )
             ] = vol.In(collective_options)
 
-        schema_dict.update(
-            {
-                vol.Required(
-                    CONF_ALEXA_FEED_SCENE_NAME,
-                    default=str(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_FEED_SCENE_NAME,
-                            DEFAULT_ALEXA_FEED_SCENE_NAME,
-                        )
-                    ),
-                ): str,
-                vol.Required(
-                    CONF_ALEXA_FEED_SCENE_MODE,
-                    default=_mode_default(
-                        CONF_ALEXA_FEED_SCENE_MODE,
-                        DEFAULT_ALEXA_FEED_SCENE_MODE,
-                    ),
-                ): mode_optional_selector,
-                vol.Required(
-                    CONF_ALEXA_FEED_RETURN_ENABLED,
-                    default=bool(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_FEED_RETURN_ENABLED,
-                            DEFAULT_ALEXA_FEED_RETURN_ENABLED,
-                        )
-                    ),
-                ): bool,
-                vol.Required(
-                    CONF_ALEXA_FEED_RETURN_DELAY_MINUTES,
-                    default=int(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_FEED_RETURN_DELAY_MINUTES,
-                            DEFAULT_ALEXA_FEED_RETURN_DELAY_MINUTES,
-                        )
-                    ),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
-                vol.Required(
-                    CONF_ALEXA_FEED_RETURN_MODE,
-                    default=_mode_default(
-                        CONF_ALEXA_FEED_RETURN_MODE,
-                        DEFAULT_ALEXA_FEED_RETURN_MODE,
-                    ),
-                ): mode_optional_selector,
-                vol.Required(
-                    CONF_ALEXA_MAINT_SCENE_NAME,
-                    default=str(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_MAINT_SCENE_NAME,
-                            DEFAULT_ALEXA_MAINT_SCENE_NAME,
-                        )
-                    ),
-                ): str,
-                vol.Required(
-                    CONF_ALEXA_MAINT_SCENE_MODE,
-                    default=_mode_default(
-                        CONF_ALEXA_MAINT_SCENE_MODE,
-                        DEFAULT_ALEXA_MAINT_SCENE_MODE,
-                    ),
-                ): mode_optional_selector,
-                vol.Required(
-                    CONF_ALEXA_MAINT_RETURN_ENABLED,
-                    default=bool(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_MAINT_RETURN_ENABLED,
-                            DEFAULT_ALEXA_MAINT_RETURN_ENABLED,
-                        )
-                    ),
-                ): bool,
-                vol.Required(
-                    CONF_ALEXA_MAINT_RETURN_DELAY_MINUTES,
-                    default=int(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_MAINT_RETURN_DELAY_MINUTES,
-                            DEFAULT_ALEXA_MAINT_RETURN_DELAY_MINUTES,
-                        )
-                    ),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
-                vol.Required(
-                    CONF_ALEXA_MAINT_RETURN_MODE,
-                    default=_mode_default(
-                        CONF_ALEXA_MAINT_RETURN_MODE,
-                        DEFAULT_ALEXA_MAINT_RETURN_MODE,
-                    ),
-                ): mode_optional_selector,
-                vol.Required(
-                    CONF_ALEXA_CUSTOM_SCENE_NAME,
-                    default=str(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_CUSTOM_SCENE_NAME,
-                            DEFAULT_ALEXA_CUSTOM_SCENE_NAME,
-                        )
-                    ),
-                ): str,
-                vol.Required(
-                    CONF_ALEXA_CUSTOM_SCENE_MODE,
-                    default=_mode_default(
-                        CONF_ALEXA_CUSTOM_SCENE_MODE,
-                        DEFAULT_ALEXA_CUSTOM_SCENE_MODE,
-                    ),
-                ): mode_optional_selector,
-                vol.Required(
-                    CONF_ALEXA_CUSTOM_RETURN_ENABLED,
-                    default=bool(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_CUSTOM_RETURN_ENABLED,
-                            DEFAULT_ALEXA_CUSTOM_RETURN_ENABLED,
-                        )
-                    ),
-                ): bool,
-                vol.Required(
-                    CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
-                    default=int(
-                        self._config_entry.options.get(
-                            CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
-                            DEFAULT_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
-                        )
-                    ),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
-                vol.Required(
-                    CONF_ALEXA_CUSTOM_RETURN_MODE,
-                    default=_mode_default(
-                        CONF_ALEXA_CUSTOM_RETURN_MODE,
-                        DEFAULT_ALEXA_CUSTOM_RETURN_MODE,
-                    ),
-                ): mode_optional_selector,
-            }
+        schema_dict[vol.Required(SECTION_FEED_SCENE)] = section(
+            _scene_section(
+                CONF_ALEXA_FEED_SCENE_NAME, DEFAULT_ALEXA_FEED_SCENE_NAME,
+                CONF_ALEXA_FEED_SCENE_MODE, DEFAULT_ALEXA_FEED_SCENE_MODE,
+                CONF_ALEXA_FEED_RETURN_ENABLED, DEFAULT_ALEXA_FEED_RETURN_ENABLED,
+                CONF_ALEXA_FEED_RETURN_DELAY_MINUTES, DEFAULT_ALEXA_FEED_RETURN_DELAY_MINUTES,
+                CONF_ALEXA_FEED_RETURN_MODE, DEFAULT_ALEXA_FEED_RETURN_MODE,
+            ),
+            {"collapsed": scenes_collapsed},
+        )
+        schema_dict[vol.Required(SECTION_MAINT_SCENE)] = section(
+            _scene_section(
+                CONF_ALEXA_MAINT_SCENE_NAME, DEFAULT_ALEXA_MAINT_SCENE_NAME,
+                CONF_ALEXA_MAINT_SCENE_MODE, DEFAULT_ALEXA_MAINT_SCENE_MODE,
+                CONF_ALEXA_MAINT_RETURN_ENABLED, DEFAULT_ALEXA_MAINT_RETURN_ENABLED,
+                CONF_ALEXA_MAINT_RETURN_DELAY_MINUTES, DEFAULT_ALEXA_MAINT_RETURN_DELAY_MINUTES,
+                CONF_ALEXA_MAINT_RETURN_MODE, DEFAULT_ALEXA_MAINT_RETURN_MODE,
+            ),
+            {"collapsed": scenes_collapsed},
+        )
+        schema_dict[vol.Required(SECTION_CUSTOM_SCENE)] = section(
+            _scene_section(
+                CONF_ALEXA_CUSTOM_SCENE_NAME, DEFAULT_ALEXA_CUSTOM_SCENE_NAME,
+                CONF_ALEXA_CUSTOM_SCENE_MODE, DEFAULT_ALEXA_CUSTOM_SCENE_MODE,
+                CONF_ALEXA_CUSTOM_RETURN_ENABLED, DEFAULT_ALEXA_CUSTOM_RETURN_ENABLED,
+                CONF_ALEXA_CUSTOM_RETURN_DELAY_MINUTES, DEFAULT_ALEXA_CUSTOM_RETURN_DELAY_MINUTES,
+                CONF_ALEXA_CUSTOM_RETURN_MODE, DEFAULT_ALEXA_CUSTOM_RETURN_MODE,
+            ),
+            {"collapsed": True},
         )
 
         schema = vol.Schema(schema_dict)
@@ -705,6 +678,15 @@ class HydrosOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                 data_schema=schema,
                 errors={},
             )
+
+        # Section values arrive nested; accept flat input too (older clients
+        # and REST submissions).
+        flat_input: dict[str, Any] = dict(user_input)
+        for section_key in (SECTION_FEED_SCENE, SECTION_MAINT_SCENE, SECTION_CUSTOM_SCENE):
+            nested = flat_input.pop(section_key, None)
+            if isinstance(nested, dict):
+                flat_input.update(nested)
+        user_input = flat_input
 
         options_data: dict[str, Any] = {
             CONF_ENABLE_REMOTE_CONTROL: bool(user_input.get(CONF_ENABLE_REMOTE_CONTROL, False)),

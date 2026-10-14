@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+## 0.6.9 - 2026-10-14
+
+### Fixed
+- **Configure → "Not all required fields are filled in"** when turning on remote control (#7, #8). Every option was declared required, including fields that are legitimately blank (the custom scene name/mode and "(none)" mode choices), so the Home Assistant frontend refused to submit the form — even for users who never use Alexa scenes. Scene fields are now optional; leaving one blank means "not used".
+- **Options save could hang or leave the entry half-loaded.** The integration's update listener unloaded and re-set-up the entry by hand, bypassing Home Assistant's config-entry setup lock. It now uses `hass.config_entries.async_reload()`.
+
+### Changed
+- Configure form layout (#7): the Feed, Maintenance and Custom scene settings are grouped into their own collapsible sections with clear labels, and stay collapsed unless Alexa scenes are on and easy setup is off. Mode fields use a dropdown of the controller's modes.
+- Thanks @Ftown14 for the report, the diagnosis, and PR #8.
+
 ## 0.6.8 - 2026-10-14
 
 ### Fixed
